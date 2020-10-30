@@ -94,8 +94,10 @@ enum filterList
     EMBOSS,
     FILTER_LIST_SIZE
 };
-static const int filterSelection = VERT_EDGE_DETECT;
+//static const int filterSelection = VERT_EDGE_DETECT;
 //static const int filterSelection = GAUSSIAN_BLUR;
+//static const int filterSelection = EDGE_SHARPEN;
+static const int filterSelection = EMBOSS;
 
 #define MEM_SIZE (128)
 #define MAX_SOURCE_SIZE (0x100000)
@@ -128,9 +130,21 @@ constexpr size_t b_columns = 600;
 
 #endif
 
-
+float4 *pixel2rgba(float *image_in, size_t ImageRows, size_t ImageCols, image_channel_order chan_order)
+{
+    // allocate spaces
+    float4 *ret = (float4 *)malloc(ImageRows*ImageCols*sizeof(float4));
+    if (chan_order == image_channel_order::luminance) {
+      return ret;
+    }
+    else {
+      std::cout << "ERROR: unknown image channel order" << std::endl;
+      free(ret);
+      return NULL;
+    }
+}
 //************************************
-// Image Convolution in DPC++ on device: returns sum in 4th parameter "sum_parallel".
+// Image Convolution in DPC++ on device: 
 //************************************
 void ImageConv(queue &q, void *image_in, void *image_out, float *filter_in, 
     const size_t FilterWidth, size_t ImageRows, size_t ImageCols) 
@@ -142,20 +156,23 @@ void ImageConv(queue &q, void *image_in, void *image_out, float *filter_in,
     // image_in is a host side buffer of size ImageRows x ImageCols
     // each data item in image_in is float, representing a pixel 
     // In the example file cat.bmp, each pixel is of 8-bit color, so we just 
-    // use "luminance" as channel order which replicates the value in all R, G, B 
-    // and Alpha components in the image object 
+    // use "r" as channel order which replicates the value in all R component 
+    // in the image object 
     // The channel type is set as fp32
     //
-    // TODO: we could use unsigned_int8 as channel type, but that might require 
-    // dealing with overflow when applying filters.
-    image<2> srcImage(image_in, image_channel_order::luminance, image_channel_type::fp32,
-                        range<2>(ImageRows, ImageCols));
+    image<2> srcImage(image_in, image_channel_order::r, image_channel_type::fp32,
+                        range<2>(ImageCols, ImageRows));
     
-    image<2> dstImage(image_out, image_channel_order::luminance, image_channel_type::fp32,
-                        range<2>(ImageRows, ImageCols));
+    image<2> dstImage(image_out, image_channel_order::r, image_channel_type::fp32,
+                        range<2>(ImageCols, ImageRows));
+
+    //for(int i=0; i<ImageRows; i++) {
+    //  for(int j=0; j<ImageCols; j++)
+    //    std::cout << "image_out[" << i << "," << j << "]=" << (float *)image_out[i*ImageCols+j] << std::endl;
+    //}
 
     // Create the range object for the pixel data managed by the image.
-    range<2> num_items{ImageRows, ImageCols};
+    range<2> num_items{ImageCols, ImageRows};
 
     // Create buffers that hold the filter shared between the host and the devices.
     buffer<float, 1> filter_buf(filter_in, range<1>(FilterWidth*FilterWidth));
@@ -172,7 +189,9 @@ void ImageConv(queue &q, void *image_in, void *image_out, float *filter_in,
         srcImage, h);
 
       // Another way to get access is to call get_access() member function 
-      auto dstPtr = dstImage.get_access<float4, access::mode::write>(h);
+      //auto dstPtr = dstImage.get_access<float4, access::mode::write>(h);
+      accessor<float4, 2, access::mode::write, access::target::image> dstPtr(
+        dstImage, h);
 
       // Samplers are used to specify the way in which the coordinates map to
       // a particular pixel in the image. 
@@ -197,8 +216,8 @@ void ImageConv(queue &q, void *image_in, void *image_out, float *filter_in,
       { 
 
         // get row and col of the pixel assigned to this work item
-        int row = item[0];
-        int column = item[1];
+        int column = item[0];
+        int row = item[1];
 
         // Half the width of the filter is needed for indexing memory later 
         int halfWidth = (int)(FilterWidth/2);
@@ -239,12 +258,15 @@ void ImageConv(queue &q, void *image_in, void *image_out, float *filter_in,
         // Copy the data to the output image 
         coords[0] = column;
         coords[1] = row;
+        // FIXME, just write test data
+        //sum = {4444.0f, 3333.0f, 2222.0f, 1111.0f};
         // Images are written to in a similar fashion without a sampler.
         dstPtr.write(coords, sum);
       }
     );
   });
 }
+
 
 int main() {
   // Create device selector for the device of your interest.
@@ -270,11 +292,6 @@ int main() {
   cl_int filterWidth;
   float filterFactor;
   float *filter;
-
-  FILE *fp;
-  char fileName[] = "./mykernel.cl";
-  char *source_str;
-  size_t source_size;
 
   // Query about the platform
   /*
@@ -341,14 +358,6 @@ int main() {
     hOutputImage[i] = 1234.0;
 
 
-  // Create matrix objects with row, column and initial value 
-  // to store the input and output data.
-  IntMatrix a(a_rows, a_columns, 1);
-  IntMatrix b(a_columns, b_columns, 2);
-  IntMatrix c(a_rows, b_columns, 3);
-  IntMatrix sum_sequential(a_rows, b_columns, 0);
-  IntMatrix sum_parallel(a_rows, b_columns, 0);
-
   dpc::Timer t;
 
   try {
@@ -357,12 +366,8 @@ int main() {
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
               << q.get_device().get_info<info::device::name>() << "\n";
-    std::cout << "Matrix A size: " << a.row << "," << a.column << std::endl;
-    std::cout << "Matrix B size: " << b.row << "," << b.column << std::endl;
-    std::cout << "Matrices C, D size: " << sum_parallel.row << "," 
-              << sum_parallel.column << std::endl;
 
-    // Matrix multiplication in DPC++
+    // Image convolution in DPC++
     ImageConv(q, hInputImage, hOutputImage, filter, filterWidth, imageRows, imageCols);
   } catch (exception const &e) {
     std::cout << "An exception is caught for image convolution.\n";
@@ -371,7 +376,32 @@ int main() {
 
   std::cout << t.elapsed().count() << " seconds\n";
 
+  /* Save the output bmp */
+  printf("Output image saved as: cat-filtered.bmp\n");
+  writeBmpFloat(hOutputImage, "cat-filtered.bmp", imageRows, imageCols,
+          inputImagePath);
 
-  std::cout << "Image Convolution successfully completed on device.\n";
+  /* Verify result */
+  float *refOutput = convolutionGoldFloat(hInputImage, imageRows, imageCols,
+    filter, filterWidth);
+
+  writeBmpFloat(refOutput, "cat-filtered-ref.bmp", imageRows, imageCols,
+          inputImagePath);
+
+  bool passed = true;
+  for (i = 0; i < imageRows*imageCols; i++) {
+    if (fabsf(refOutput[i]-hOutputImage[i]) > 0.001f) {
+        printf("%f %f\n", refOutput[i], hOutputImage[i]);
+        passed = false;
+    }
+  }
+  if (passed) {
+    printf("Passed!\n");
+    std::cout << "Image Convolution successfully completed on device.\n";
+  }
+  else {
+    printf("Failed!\n");
+  }
+
   return 0;
 }
