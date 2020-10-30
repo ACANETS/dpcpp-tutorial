@@ -1,0 +1,10 @@
+{
+  "name": "Matrix Multiplication",
+  "categories": ["Toolkit/Get Started", "Toolkit/Intel® oneAPI Base Toolkit/oneAPI DPC++ Compiler/CPU, GPU and FPGA"],
+  "description": "Simple program that computes on matrix multiplication in Data Parallel C++.",
+  "toolchain": ["dpcpp"],
+  "languages": [{"cpp": {"properties": {"projectOptions": [{"projectType": "makefile"}]}}}],
+  "targetDevice": ["CPU", "GPU", "FPGA"],
+  "os": ["linux"],
+  "builder": ["make"]
+}

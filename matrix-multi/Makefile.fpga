@@ -1,0 +1,66 @@
+CXX := dpcpp
+CXXFLAGS = -O2 -g -std=c++17
+
+SRC := src/matrix-multi-buffers.cpp
+USM_SRC := src/matrix-multi-usm.cpp
+
+.PHONY: fpga_emu run_emu fpga_emu_usm run_emu_usm clean 
+
+fpga_emu: matrix-multi-buffers.fpga_emu
+fpga_emu_usm: matrix-multi-usm.fpga_emu_usm
+
+hw: matrix-multi-buffers.fpga
+hw_usm: matrix-multi-usm.fpga
+
+report: matrix-multi-buffers_report.a
+report_usm: matrix-multi-usm_report.a_usm
+
+matrix-multi-buffers.fpga_emu: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
+matrix-multi-usm.fpga_emu_usm: $(USM_SRC)
+	@#$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
+	@echo USM is not supported for FPGAs, yet
+
+
+a.o: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+a_usm.o: $(USM_SRC)
+	@#$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+	@echo USM is not supported for FPGAs, yet	
+
+matrix-multi-buffers.fpga: a.o
+	$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -Xshardware
+matrix-multi-usm.fpga: a_usm.o
+	@#$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -Xshardware
+	@echo USM is not supported for FPGAs, yet
+
+run_emu: matrix-multi-buffers.fpga_emu
+	./matrix-multi-buffers.fpga_emu
+run_emu_usm: matrix-multi-usm.fpga_emu_usm
+	@#./matrix-multi-usm.fpga_emu_usm
+	@echo USM is not supported for FPGAs, yet
+
+
+run_hw: matrix-multi-buffers.fpga
+	./matrix-multi-buffers.fpga
+run_hw_usm: matrix-multi-usm.fpga
+	@#./matrix-multi-usm.fpga
+	@echo USM is not supported for FPGAs, yet	
+
+dev.o: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+dev_usm.o: $(USM_SRC)
+	@#$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+	@echo USM is not supported for FPGAs, yet
+
+
+
+matrix-multi-buffers_report.a: dev.o
+	$(CXX) $(CXXFLAGS) -fintelfpga -fsycl-link $^ -o $@ -Xshardware
+matrix-multi-usm_report.a_usm: dev_usm.o
+	@#$(CXX) $(CXXFLAGS) -fintelfpga -fsycl-link $^ -o $@ -Xshardware
+	@echo USM is not supported for FPGAs, yet
+
+
+clean:
+	rm -rf *.o *.d *.out *.mon *.emu *.aocr *.aoco *.prj *.fpga_emu *.fpga_emu_buffers matrix-multi-buffers.fpga  matrix-multi-usm.fpga *.a
