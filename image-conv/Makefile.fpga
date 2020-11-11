@@ -3,7 +3,7 @@ CXXFLAGS = -O2 -g -std=c++17
 CXXINC = -Isrc/Utils
 
 SRC := src/image-conv-buffers.cpp
-USM_SRC := src/matrix-multi-usm.cpp
+USM_SRC := src/matrix-multi-usm.cpp src/Utils/bmp-utils.c src/Utils/gold.c src/Utils/utils.c
 
 .PHONY: fpga_emu run_emu fpga_emu_usm run_emu_usm clean 
 
