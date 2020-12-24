@@ -2,8 +2,8 @@ CXX = dpcpp
 CXXFLAGS = -O2 -g -std=c++17
 INCDIR = src/Utils
 
-BUFFER_EXE_NAME = image-conv-buffers
-BUFFER_SOURCES = src/image-conv-buffers.cpp src/Utils/utils.c src/Utils/gold.c src/Utils/bmp-utils.c
+BUFFER_EXE_NAME = image-conv
+BUFFER_SOURCES = src/image-conv.cpp src/Utils/utils.c src/Utils/gold.c src/Utils/bmp-utils.c
 
 all: build_buffers
 

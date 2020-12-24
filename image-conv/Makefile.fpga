@@ -2,66 +2,37 @@ CXX := dpcpp
 CXXFLAGS = -O2 -g -std=c++17
 CXXINC = -Isrc/Utils
 
-SRC := src/image-conv-buffers.cpp
-USM_SRC := src/matrix-multi-usm.cpp src/Utils/bmp-utils.c src/Utils/gold.c src/Utils/utils.c
+SRC := src/image-conv.cpp src/Utils/bmp-utils.c src/Utils/gold.c src/Utils/utils.c
 
-.PHONY: fpga_emu run_emu fpga_emu_usm run_emu_usm clean 
+.PHONY: fpga_emu run_emu clean 
 
-fpga_emu: image-conv-buffers.fpga_emu
-fpga_emu_usm: matrix-multi-usm.fpga_emu_usm
+fpga_emu: image-conv.fpga_emu
 
-hw: image-conv-buffers.fpga
-hw_usm: matrix-multi-usm.fpga
+hw: image-conv.fpga
 
-report: image-conv-buffers_report.a
-report_usm: matrix-multi-usm_report.a_usm
+report: image-conv_report.a
 
-image-conv-buffers.fpga_emu: $(SRC)
+image-conv.fpga_emu: $(SRC)
 	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
-matrix-multi-usm.fpga_emu_usm: $(USM_SRC)
-	@#$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
-	@echo USM is not supported for FPGAs, yet
 
 
 a.o: $(SRC)
 	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
-a_usm.o: $(USM_SRC)
-	@#$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
-	@echo USM is not supported for FPGAs, yet	
 
-image-conv-buffers.fpga: a.o
+image-conv.fpga: a.o
 	$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -Xshardware
-matrix-multi-usm.fpga: a_usm.o
-	@#$(CXX) $(CXXFLAGS) -fintelfpga $^ -o $@ -Xshardware
-	@echo USM is not supported for FPGAs, yet
 
-run_emu: image-conv-buffers.fpga_emu
-	./image-conv-buffers.fpga_emu
-run_emu_usm: matrix-multi-usm.fpga_emu_usm
-	@#./matrix-multi-usm.fpga_emu_usm
-	@echo USM is not supported for FPGAs, yet
+run_emu: image-conv.fpga_emu
+	./image-conv.fpga_emu
 
-
-run_hw: image-conv-buffers.fpga
-	./image-conv-buffers.fpga
-run_hw_usm: matrix-multi-usm.fpga
-	@#./matrix-multi-usm.fpga
-	@echo USM is not supported for FPGAs, yet	
+run_hw: image-conv.fpga
+	./image-conv.fpga
 
 dev.o: $(SRC)
 	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
-dev_usm.o: $(USM_SRC)
-	@#$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
-	@echo USM is not supported for FPGAs, yet
 
-
-
-image-conv-buffers_report.a: dev.o
+image-conv_report.a: dev.o
 	$(CXX) $(CXXFLAGS) -fintelfpga -fsycl-link $^ -o $@ -Xshardware
-matrix-multi-usm_report.a_usm: dev_usm.o
-	@#$(CXX) $(CXXFLAGS) -fintelfpga -fsycl-link $^ -o $@ -Xshardware
-	@echo USM is not supported for FPGAs, yet
-
 
 clean:
-	rm -rf *.o *.d *.out *.mon *.emu *.aocr *.aoco *.prj *.fpga_emu *.fpga_emu_buffers image-conv-buffers.fpga  matrix-multi-usm.fpga *.a
+	rm -rf *.o *.d *.out *.mon *.emu *.aocr *.aoco *.prj *.fpga_emu *.fpga_emu_buffers image-conv.fpga *.a
