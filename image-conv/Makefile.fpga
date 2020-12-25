@@ -20,7 +20,7 @@ a.o: $(SRC)
 	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
 
 image-conv.fpga:  $(SRC)
-	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -Xshardware
+	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -Xshardware -DFPGA=1
 
 run_emu: image-conv.fpga_emu
 	./image-conv.fpga_emu
