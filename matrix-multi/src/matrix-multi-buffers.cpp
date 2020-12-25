@@ -1,29 +1,13 @@
 //==============================================================
-// Vector Add is the equivalent of a Hello, World! sample for data parallel
-// programs. Building and running the sample verifies that your development
-// environment is setup correctly and demonstrates the use of the core features
-// of DPC++. This sample runs on both CPU and GPU (or FPGA). When run, it
-// computes on both the CPU and offload device, then compares results. If the
-// code executes on both CPU and offload device, the device name and a success
-// message are displayed. And, your development environment is setup correctly!
+// DPC++ Example
 //
-// For comprehensive instructions regarding DPC++ Programming, go to
-// https://software.intel.com/en-us/oneapi-programming-guide and search based on
-// relevant terms noted in the comments.
+// Matrix Multiplication with DPC++
 //
-// DPC++ material used in the code sample:
-// •	A one dimensional array of data.
-// •	A device queue, buffer, accessor, and kernel.
-//==============================================================
-// Copyright © 2020 Intel Corporation
+// Author: Yan Luo
 //
-// SPDX-License-Identifier: MIT
-// =============================================================
-
-// EECE.6540 Heterogeneous Computing
-// Lab 4 Matrix Multiplication with DPC++
+// Copyright ©  2020-
 //
-// yluo
+// MIT License
 //
 #include <CL/sycl.hpp>
 #include <array>
@@ -93,8 +77,6 @@ void MatrixMulti(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b,
     // The sum_accessor is used to store (with write permission) the sum data.
     auto sum = sum_buf.get_access<access::mode::write>(h);
   
-    //auto tx = t_buf.get_access<access::mode::write>(h);
-
     // Use parallel_for to run vector addition in parallel on device. This
     // executes the kernel.
     //    1st parameter is the number of work items.
@@ -103,8 +85,7 @@ void MatrixMulti(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b,
     // DPC++ supports unnamed lambda kernel by default.
     h.parallel_for(num_items, [=](id<2> i) 
       { size_t c_row = i[0], c_col = i[1];
-        //tx[c_row] = 1000;
-        //sum[c_row*widthC + c_col] = 0;
+
         sum[c_row][c_col] = 0;
         for (size_t k = 0; k < widthA; k++)
           //sum[c_row*widthC + c_col] += a[c_row * widthA + k] * b[k*widthB + c_col]; 
@@ -117,21 +98,7 @@ void MatrixMulti(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b,
 }
 
 //************************************
-// Initialize the array from 0 to array_size - 1
-//************************************
-/*
-void InitializeArray(IntArray &a, int initValue) {
-  for (size_t i = 0; i < a.size(); i++) a[i] = initValue;
-}
-
-void InitializeMatrix(IntArray &a, int row, int column, int initValue) {
-  for (size_t i = 0; i < a.size(); i++) 
-    InitializeArray(IntArray &a[i], initValue);
-}
-*/
-
-//************************************
-// Demonstrate vector add both in sequential on CPU and in parallel on device.
+// Demonstrate matrix multiplication both in sequential on CPU and in parallel on device.
 //************************************
 int main() {
   // Create device selector for the device of your interest.
@@ -147,7 +114,7 @@ int main() {
 #endif
 
   // Query about the platform
-  /*
+  //
   unsigned number = 0;
   auto myPlatforms = platform::get_platforms();
   // loop through the platforms to poke into
@@ -161,7 +128,7 @@ int main() {
       << oneDevice.get_info<info::device::name>() <<std::endl;
     }
   }
-*/
+  std::cout << std::endl;
 
   // Create matrix objects with row, column and initial value 
   // to store the input and output data.
@@ -230,14 +197,6 @@ int main() {
     std::cout << "\n";
   }
 */
-
-  // Print out test buffer tt.
-  /*
-  std::cout<<"### tt ###"<<std::endl;
-  for (size_t i = 0; i < sum_parallel.row; i++) 
-    std::cout << tt[i] << " ";
-  std::cout << "\n";
-  */
 
   std::cout << "Matrix multiplication successfully completed on device.\n";
   return 0;
