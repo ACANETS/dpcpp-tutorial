@@ -232,7 +232,7 @@ int main() {
         dev.get_info<cl::sycl::info::device::max_compute_units>();
     std::cout << "num of compute units = " << num_groups << std::endl;
 
-    num_groups = 2 ;
+    num_groups = 2 < num_groups ? 2 : num_groups;
     std::cout << "FORCE num of compute units = " << num_groups << std::endl;
 
     auto wgroup_size = dev.get_info<info::device::max_work_group_size>();
