@@ -29,7 +29,7 @@ class IntMatrix {
     column = c;
     elements = std::vector<int>(r*c, initVal);
   }
-  int e(size_t r, size_t c) {
+  int e(size_t r, size_t c) const {
     return elements[r*column+c];
   }
 };
@@ -47,7 +47,7 @@ constexpr size_t b_columns = 6000;
 //************************************
 // Matrix multiplication in DPC++ on device: returns sum in 4th parameter "sum_parallel".
 //************************************
-void MatrixMulti_v1(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b, const IntMatrix &matrix_c,
+void MatrixMulti_v1(queue &q, IntMatrix &matrix_a, IntMatrix &matrix_b, IntMatrix &matrix_c,
                IntMatrix &matrix_d_parallel) {
 
   // Create the range object for the arrays managed by the buffer.
@@ -97,30 +97,31 @@ void MatrixMulti_v1(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix
   });
 }
 
-void MatrixMulti_v2(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b, const IntMatrix &matrix_c,
-               IntMatrix &matrix_d_parallel) {
+void MatrixMulti_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+  float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
 
   // Create the range object for the arrays managed by the buffer.
-  range<2> num_items{matrix_d_parallel.row, matrix_d_parallel.column};
-  size_t widthA = matrix_a.column;
-  size_t widthB = matrix_b.column;
-  size_t widthC = matrix_c.column;
+  range<2> num_items{a_rows, b_columns};
+  size_t widthA = a_columns;
+  size_t widthB = b_columns;
+  size_t widthC = b_columns;
 
   // Create buffers that hold the data shared between the host and the devices.
   // The buffer destructor is responsible to copy the data back to host when it
   // goes out of scope.
-  buffer a_buf(matrix_a.elements);
-  buffer b_buf(matrix_b.elements);
-  buffer c_buf(matrix_c.elements);
-  buffer<int,2> sum_buf(matrix_d_parallel.elements.data(), num_items);
+  buffer<float, 2> a_buf(reinterpret_cast<float *>(matrix_a), range(a_rows, a_columns));
+  buffer<float, 2> b_buf(reinterpret_cast<float *>(matrix_b), range(a_columns, b_columns));
+  buffer<float, 2> c_buf(reinterpret_cast<float *>(matrix_c), num_items);
+  buffer<float, 2> sum_buf(reinterpret_cast<float *>(matrix_d_parallel), num_items);
 
+#if 0
   // submit a command to write initial data to buffer A on device
   q.submit([&](handler &h) {
     auto a = a_buf.get_access<access::mode::write>(h);
     h.parallel_for(range(a_rows, a_columns), [=](id<2> i) {
-      row = i[0];
-      col = i[1];
-      a[row*widthA+col] = matrix_a.e(row,col);
+      size_t row = i[0];
+      size_t col = i[1];
+      a[i] = matrix_a[row][col];
     });
   });
 
@@ -128,9 +129,9 @@ void MatrixMulti_v2(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix
   q.submit([&](handler &h) {
     auto b = b_buf.get_access<access::mode::write>(h);
     h.parallel_for(range(a_columns, b_columns), [=](id<2> i) {
-      row = i[0];
-      col = i[1];
-      b[row*widthB+col] = matrix_b.e(row,col);
+      int row = i[0];
+      int col = i[1];
+      b[row][col] = matrix_b[row][col];
     });
   });
 
@@ -138,20 +139,22 @@ void MatrixMulti_v2(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix
   q.submit([&](handler &h) {
     auto c = c_buf.get_access<access::mode::write>(h);
     h.parallel_for(range(a_rows, b_columns), [=](id<2> i) {
-      row = i[0];
-      col = i[1];
-      c[row*widthC+col] = matrix_c.e(row,col);
+      int row = i[0];
+      int col = i[1];
+      c[row][col] = matrix_c[row][col];
     });
   });
+#endif
 
+#if 1
   // Submit a command group to the queue by a lambda function that contains the
   // data access permission and device computation (kernel).
   q.submit([&](handler &h) {
     // Create an accessor for each buffer with access permission: read, write or
     // read/write. The accessor is a mean to access the memory in the buffer.
-    auto a = a_buf.get_access<access::mode::read>(h);
-    auto b = b_buf.get_access<access::mode::read>(h);
-    auto c = c_buf.get_access<access::mode::read>(h);
+    auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto c = c_buf.get_access<access::mode::read, access::target::global_buffer>(h);
 
     // The sum_accessor is used to store (with write permission) the sum data.
     auto sum = sum_buf.get_access<access::mode::write>(h);
@@ -165,13 +168,15 @@ void MatrixMulti_v2(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix
     h.parallel_for(num_items, [=](id<2> i) 
       { size_t c_row = i[0], c_col = i[1];
 
-        s = 0;
+        int s = 0;
         for (size_t k = 0; k < widthA; k++)
-          s += a[c_row * widthA + k] * b[k*widthB + c_col]; 
-        sum[c_row][c_col]  = c[c_row*widthC + c_col] + s;
-      }
-    );
+          s += a[c_row][k] * b[k][c_col]; 
+
+        sum[c_row][c_col]  = c[c_row][c_col] + s;
+      });
   });
+#endif
+
 }
 
 //************************************
@@ -188,6 +193,7 @@ int main() {
 #else
   // The default device selector will select the most performant device.
   default_selector d_selector;
+  //cpu_selector d_selector;
 #endif
 
   // Query about the platform
@@ -207,13 +213,32 @@ int main() {
   }
   std::cout << std::endl;
 
-  // Create matrix objects with row, column and initial value 
+  // Create matrices with row, column and initial value 
   // to store the input and output data.
-  IntMatrix a(a_rows, a_columns, 1);
-  IntMatrix b(a_columns, b_columns, 2);
-  IntMatrix c(a_rows, b_columns, 3);
-  IntMatrix sum_sequential(a_rows, b_columns, 0);
-  IntMatrix sum_parallel(a_rows, b_columns, 0);
+  float(*A)[a_columns] = new float[a_rows][a_columns];
+  // Intialize values
+  for (int i = 0; i < a_rows; i++)
+    for (int j = 0; j < a_columns; j++) A[i][j] = 1.0;
+
+  float(*B)[b_columns] = new float[a_columns][b_columns];
+  // Intialize values
+  for (int i = 0; i < a_columns; i++)
+    for (int j = 0; j < b_columns; j++) B[i][j] = 2.0;
+
+  float(*C)[b_columns] = new float[a_rows][b_columns];
+  // Intialize values
+  for (int i = 0; i < a_rows; i++)
+    for (int j = 0; j < b_columns; j++) C[i][j] = 3.0;
+
+  float(*sum_sequential)[b_columns] = new float[a_rows][b_columns];
+  // Intialize values
+  for (int i = 0; i < a_rows; i++)
+    for (int j = 0; j < b_columns; j++) sum_sequential[i][j] = 0.0;
+
+  float(*sum_parallel)[b_columns] = new float[a_rows][b_columns];
+  // Intialize values
+  for (int i = 0; i < a_rows; i++)
+    for (int j = 0; j < b_columns; j++) sum_parallel[i][j] = 0.0;
 
   dpc::Timer t;
 
@@ -223,13 +248,13 @@ int main() {
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
               << q.get_device().get_info<info::device::name>() << "\n";
-    std::cout << "Matrix A size: " << a.row << "," << a.column << std::endl;
-    std::cout << "Matrix B size: " << b.row << "," << b.column << std::endl;
-    std::cout << "Matrices C, D size: " << sum_parallel.row << "," 
-              << sum_parallel.column << std::endl;
+    std::cout << "Matrix A size: " << a_rows << "," << a_columns << std::endl;
+    std::cout << "Matrix B size: " << a_columns << "," << b_columns << std::endl;
+    std::cout << "Matrices C, D size: " << a_rows << "," 
+              << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
-    MatrixMulti_v2(q, a, b, c, sum_parallel);
+    MatrixMulti_v2(q, A, B, C, sum_parallel);
   } catch (exception const &e) {
     std::cout << "An exception is caught for matrix multiplication.\n";
     std::terminate();
@@ -237,22 +262,26 @@ int main() {
 
   std::cout << t.elapsed().count() << " seconds\n";
 
-  size_t widthA = a.column;
-  size_t widthB = b.column;
-  size_t widthC = sum_sequential.column;
+  size_t widthA = a_columns;
+  size_t widthB = b_columns;
+  size_t widthC = b_columns;
+
+  dpc::Timer th;
 
   // Compute the sum of two arrays in sequential for validation.
-  for (size_t i = 0; i < sum_sequential.row; i++)
-    for (size_t j = 0; j < sum_sequential.column; j++) {
-      sum_sequential.elements[i*widthC+j] = c.e(i,j);
+  std::cout << "computing on host..." << std::endl;
+  for (size_t i = 0; i < a_rows; i++)
+    for (size_t j = 0; j < b_columns; j++) {
+      sum_sequential[i][j] = C[i][j];
       for (size_t k = 0; k < widthA; k++)
-        sum_sequential.elements[i*widthC+j] += a.e(i,k) * b.e(k,j);
+        sum_sequential[i][j] += A[i][k] * B[k][j];
     }
+  std::cout << th.elapsed().count() << " seconds\n";
 
   // Verify that the two arrays are equal.
-  for (size_t i = 0; i < sum_sequential.row; i++)
-    for (size_t j = 0; j < sum_sequential.column; j++) 
-      if(sum_sequential.e(i,j) != sum_parallel.e(i,j)) {
+  for (size_t i = 0; i < a_rows; i++)
+    for (size_t j = 0; j < b_columns; j++) 
+      if(sum_sequential[i][j] != sum_parallel[i][j]) {
         std::cout << "not equal" << std::endl;
         return -1;
       }
