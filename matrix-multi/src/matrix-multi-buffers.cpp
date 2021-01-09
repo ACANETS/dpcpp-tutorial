@@ -35,9 +35,9 @@ class IntMatrix {
 };
 
 // matrice shapes for this example.
-constexpr size_t a_rows = 200;
-constexpr size_t a_columns = 400;
-constexpr size_t b_columns = 600;
+constexpr size_t a_rows = 2000;
+constexpr size_t a_columns = 4000;
+constexpr size_t b_columns = 6000;
 
 // matrix A size: a_rows x a_columns
 // matrix B size: a_columns x b_columns
@@ -47,7 +47,7 @@ constexpr size_t b_columns = 600;
 //************************************
 // Matrix multiplication in DPC++ on device: returns sum in 4th parameter "sum_parallel".
 //************************************
-void MatrixMulti(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b, const IntMatrix &matrix_c,
+void MatrixMulti_v1(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b, const IntMatrix &matrix_c,
                IntMatrix &matrix_d_parallel) {
 
   // Create the range object for the arrays managed by the buffer.
@@ -92,6 +92,83 @@ void MatrixMulti(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b,
           sum[c_row][c_col] += a[c_row * widthA + k] * b[k*widthB + c_col]; 
         //sum[c_row*widthC + c_col]  += c[c_row*widthC + c_col];
         sum[c_row][c_col]  += c[c_row*widthC + c_col];
+      }
+    );
+  });
+}
+
+void MatrixMulti_v2(queue &q, const IntMatrix &matrix_a, const IntMatrix &matrix_b, const IntMatrix &matrix_c,
+               IntMatrix &matrix_d_parallel) {
+
+  // Create the range object for the arrays managed by the buffer.
+  range<2> num_items{matrix_d_parallel.row, matrix_d_parallel.column};
+  size_t widthA = matrix_a.column;
+  size_t widthB = matrix_b.column;
+  size_t widthC = matrix_c.column;
+
+  // Create buffers that hold the data shared between the host and the devices.
+  // The buffer destructor is responsible to copy the data back to host when it
+  // goes out of scope.
+  buffer a_buf(matrix_a.elements);
+  buffer b_buf(matrix_b.elements);
+  buffer c_buf(matrix_c.elements);
+  buffer<int,2> sum_buf(matrix_d_parallel.elements.data(), num_items);
+
+  // submit a command to write initial data to buffer A on device
+  q.submit([&](handler &h) {
+    auto a = a_buf.get_access<access::mode::write>(h);
+    h.parallel_for(range(a_rows, a_columns), [=](id<2> i) {
+      row = i[0];
+      col = i[1];
+      a[row*widthA+col] = matrix_a.e(row,col);
+    });
+  });
+
+  // submit a command to write initial data to buffer B on device
+  q.submit([&](handler &h) {
+    auto b = b_buf.get_access<access::mode::write>(h);
+    h.parallel_for(range(a_columns, b_columns), [=](id<2> i) {
+      row = i[0];
+      col = i[1];
+      b[row*widthB+col] = matrix_b.e(row,col);
+    });
+  });
+
+  // submit a command to write initial data to buffer C on device
+  q.submit([&](handler &h) {
+    auto c = c_buf.get_access<access::mode::write>(h);
+    h.parallel_for(range(a_rows, b_columns), [=](id<2> i) {
+      row = i[0];
+      col = i[1];
+      c[row*widthC+col] = matrix_c.e(row,col);
+    });
+  });
+
+  // Submit a command group to the queue by a lambda function that contains the
+  // data access permission and device computation (kernel).
+  q.submit([&](handler &h) {
+    // Create an accessor for each buffer with access permission: read, write or
+    // read/write. The accessor is a mean to access the memory in the buffer.
+    auto a = a_buf.get_access<access::mode::read>(h);
+    auto b = b_buf.get_access<access::mode::read>(h);
+    auto c = c_buf.get_access<access::mode::read>(h);
+
+    // The sum_accessor is used to store (with write permission) the sum data.
+    auto sum = sum_buf.get_access<access::mode::write>(h);
+  
+    // Use parallel_for to run vector addition in parallel on device. This
+    // executes the kernel.
+    //    1st parameter is the number of work items.
+    //    2nd parameter is the kernel, a lambda that specifies what to do per
+    //    work item. The parameter of the lambda is the work item id.
+    // DPC++ supports unnamed lambda kernel by default.
+    h.parallel_for(num_items, [=](id<2> i) 
+      { size_t c_row = i[0], c_col = i[1];
+
+        s = 0;
+        for (size_t k = 0; k < widthA; k++)
+          s += a[c_row * widthA + k] * b[k*widthB + c_col]; 
+        sum[c_row][c_col]  = c[c_row*widthC + c_col] + s;
       }
     );
   });
@@ -152,7 +229,7 @@ int main() {
               << sum_parallel.column << std::endl;
 
     // Matrix multiplication in DPC++
-    MatrixMulti(q, a, b, c, sum_parallel);
+    MatrixMulti_v2(q, a, b, c, sum_parallel);
   } catch (exception const &e) {
     std::cout << "An exception is caught for matrix multiplication.\n";
     std::terminate();
