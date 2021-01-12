@@ -37,9 +37,9 @@ class Timer {
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
-constexpr size_t a_rows = 200;
-constexpr size_t a_columns = 400;
-constexpr size_t b_columns = 600;
+constexpr size_t a_rows = 1000;
+constexpr size_t a_columns = 2000;
+constexpr size_t b_columns = 3000;
 
 void MatrixMulti(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
@@ -57,38 +57,6 @@ void MatrixMulti(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_col
   buffer<float, 2> b_buf(reinterpret_cast<float *>(matrix_b), range(a_columns, b_columns));
   buffer<float, 2> c_buf(reinterpret_cast<float *>(matrix_c), num_items);
   buffer<float, 2> sum_buf(reinterpret_cast<float *>(matrix_d_parallel), num_items);
-
-#if 0
-  // submit a command to write initial data to buffer A on device
-  q.submit([&](handler &h) {
-    auto a = a_buf.get_access<access::mode::write>(h);
-    h.parallel_for(range(a_rows, a_columns), [=](id<2> i) {
-      size_t row = i[0];
-      size_t col = i[1];
-      a[i] = matrix_a[row][col];
-    });
-  });
-
-  // submit a command to write initial data to buffer B on device
-  q.submit([&](handler &h) {
-    auto b = b_buf.get_access<access::mode::write>(h);
-    h.parallel_for(range(a_columns, b_columns), [=](id<2> i) {
-      int row = i[0];
-      int col = i[1];
-      b[row][col] = matrix_b[row][col];
-    });
-  });
-
-  // submit a command to write initial data to buffer C on device
-  q.submit([&](handler &h) {
-    auto c = c_buf.get_access<access::mode::write>(h);
-    h.parallel_for(range(a_rows, b_columns), [=](id<2> i) {
-      int row = i[0];
-      int col = i[1];
-      c[row][col] = matrix_c[row][col];
-    });
-  });
-#endif
 
   // Submit a command group to the queue by a lambda function that contains the
   // data access permission and device computation (kernel).
@@ -111,7 +79,7 @@ void MatrixMulti(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_col
     h.parallel_for(num_items, [=](id<2> i) 
       { size_t c_row = i[0], c_col = i[1];
 
-        int s = 0;
+        float s = 0;
         #pragma unroll 2
         for (size_t k = 0; k < widthA; k++)
           s += a[c_row][k] * b[k][c_col]; 
@@ -153,21 +121,22 @@ void MatrixMulti_st(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_
     // The sum_accessor is used to store (with write permission) the sum data.
     auto sum = sum_buf.get_access<access::mode::write>(h);
   
-    // Use parallel_for to run vector addition in parallel on device. This
+    // Use single_task to run vector addition in parallel on device. This
     // executes the kernel.
-    //    1st parameter is the number of work items.
-    //    2nd parameter is the kernel, a lambda that specifies what to do per
-    //    work item. The parameter of the lambda is the work item id.
-    // DPC++ supports unnamed lambda kernel by default.
-    h.single_task<MM>([=]() 
-      { size_t c_row = num_items[0], c_col = num_items[1];
-
-        int s = 0;
-        #pragma unroll 2
-        for (size_t k = 0; k < widthA; k++)
-          s += a[c_row][k] * b[k][c_col]; 
-
-        sum[c_row][c_col]  = c[c_row][c_col] + s;
+    // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
+    // using the cl::sycl::single_task API:
+    //   single_task<typename kernel_lambda_name>([=](){});
+    h.single_task<MM>([=]() [[intel::kernel_args_restrict]]
+      { 
+        size_t row, col;
+        float s = 0;
+        for (row = 0; row < a_rows; row++)
+          for (col = 0; col < b_columns; col++) {
+            #pragma unroll 2
+            for (size_t k = 0; k < widthA; k++)
+              s += a[row][k] * b[k][col]; 
+            sum[row][col]  = c[row][col] + s;
+          }
       });
   });
 
@@ -276,7 +245,7 @@ int main() {
   // Verify that the two arrays are equal.
   for (size_t i = 0; i < a_rows; i++)
     for (size_t j = 0; j < b_columns; j++) 
-      if(sum_sequential[i][j] != sum_parallel[i][j]) {
+      if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
         std::cout << "not equal" << std::endl;
         return -1;
       }
