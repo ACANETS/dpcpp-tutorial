@@ -33,85 +33,15 @@ class Timer {
   std::chrono::steady_clock::time_point start;
 };
 
-class IntMatrix {
-  public:
-    size_t row, column;
-    std::vector<int> elements;
-  
-  IntMatrix(size_t r, size_t c, int initVal) {
-    row = r;
-    column = c;
-    elements = std::vector<int>(r*c, initVal);
-  }
-  int e(size_t r, size_t c) const {
-    return elements[r*column+c];
-  }
-};
-
 // matrice shapes for this example.
-constexpr size_t a_rows = 2000;
-constexpr size_t a_columns = 4000;
-constexpr size_t b_columns = 6000;
+// A: a_rows x a_columns
+// B: a_columns x b_columns
+// C,Sum: a_rows x b_columns
+constexpr size_t a_rows = 200;
+constexpr size_t a_columns = 400;
+constexpr size_t b_columns = 600;
 
-// matrix A size: a_rows x a_columns
-// matrix B size: a_columns x b_columns
-// matrices C an D size: a_rows x b_columns
-
-
-//************************************
-// Matrix multiplication in DPC++ on device: returns sum in 4th parameter "sum_parallel".
-//************************************
-void MatrixMulti_v1(queue &q, IntMatrix &matrix_a, IntMatrix &matrix_b, IntMatrix &matrix_c,
-               IntMatrix &matrix_d_parallel) {
-
-  // Create the range object for the arrays managed by the buffer.
-  range<2> num_items{matrix_d_parallel.row, matrix_d_parallel.column};
-  size_t widthA = matrix_a.column;
-  size_t widthB = matrix_b.column;
-  size_t widthC = matrix_c.column;
-
-  // Create buffers that hold the data shared between the host and the devices.
-  // The buffer destructor is responsible to copy the data back to host when it
-  // goes out of scope.
-  buffer a_buf(matrix_a.elements);
-  buffer b_buf(matrix_b.elements);
-  buffer c_buf(matrix_c.elements);
-  buffer<int,2> sum_buf(matrix_d_parallel.elements.data(), num_items);
-  //buffer t_buf(tt.data(), {a_rows});
-
-  // Submit a command group to the queue by a lambda function that contains the
-  // data access permission and device computation (kernel).
-  q.submit([&](handler &h) {
-    // Create an accessor for each buffer with access permission: read, write or
-    // read/write. The accessor is a mean to access the memory in the buffer.
-    auto a = a_buf.get_access<access::mode::read>(h);
-    auto b = b_buf.get_access<access::mode::read>(h);
-    auto c = c_buf.get_access<access::mode::read>(h);
-
-    // The sum_accessor is used to store (with write permission) the sum data.
-    auto sum = sum_buf.get_access<access::mode::write>(h);
-  
-    // Use parallel_for to run vector addition in parallel on device. This
-    // executes the kernel.
-    //    1st parameter is the number of work items.
-    //    2nd parameter is the kernel, a lambda that specifies what to do per
-    //    work item. The parameter of the lambda is the work item id.
-    // DPC++ supports unnamed lambda kernel by default.
-    h.parallel_for(num_items, [=](id<2> i) 
-      { size_t c_row = i[0], c_col = i[1];
-
-        sum[c_row][c_col] = 0;
-        for (size_t k = 0; k < widthA; k++)
-          //sum[c_row*widthC + c_col] += a[c_row * widthA + k] * b[k*widthB + c_col]; 
-          sum[c_row][c_col] += a[c_row * widthA + k] * b[k*widthB + c_col]; 
-        //sum[c_row*widthC + c_col]  += c[c_row*widthC + c_col];
-        sum[c_row][c_col]  += c[c_row*widthC + c_col];
-      }
-    );
-  });
-}
-
-void MatrixMulti_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+void MatrixMulti(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
 
   // Create the range object for the arrays managed by the buffer.
@@ -160,7 +90,6 @@ void MatrixMulti_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_
   });
 #endif
 
-#if 1
   // Submit a command group to the queue by a lambda function that contains the
   // data access permission and device computation (kernel).
   q.submit([&](handler &h) {
@@ -183,15 +112,67 @@ void MatrixMulti_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_
       { size_t c_row = i[0], c_col = i[1];
 
         int s = 0;
+        #pragma unroll 2
         for (size_t k = 0; k < widthA; k++)
           s += a[c_row][k] * b[k][c_col]; 
 
         sum[c_row][c_col]  = c[c_row][c_col] + s;
       });
   });
-#endif
 
 }
+
+class MM;
+
+void MatrixMulti_st(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+  float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
+
+  // Create the range object for the arrays managed by the buffer.
+  range<2> num_items{a_rows, b_columns};
+  size_t widthA = a_columns;
+  size_t widthB = b_columns;
+  size_t widthC = b_columns;
+
+  // Create buffers that hold the data shared between the host and the devices.
+  // The buffer destructor is responsible to copy the data back to host when it
+  // goes out of scope.
+  buffer<float, 2> a_buf(reinterpret_cast<float *>(matrix_a), range(a_rows, a_columns));
+  buffer<float, 2> b_buf(reinterpret_cast<float *>(matrix_b), range(a_columns, b_columns));
+  buffer<float, 2> c_buf(reinterpret_cast<float *>(matrix_c), num_items);
+  buffer<float, 2> sum_buf(reinterpret_cast<float *>(matrix_d_parallel), num_items);
+
+  // Submit a command group to the queue by a lambda function that contains the
+  // data access permission and device computation (kernel).
+  q.submit([&](handler &h) {
+    // Create an accessor for each buffer with access permission: read, write or
+    // read/write. The accessor is a mean to access the memory in the buffer.
+    auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto c = c_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+
+    // The sum_accessor is used to store (with write permission) the sum data.
+    auto sum = sum_buf.get_access<access::mode::write>(h);
+  
+    // Use parallel_for to run vector addition in parallel on device. This
+    // executes the kernel.
+    //    1st parameter is the number of work items.
+    //    2nd parameter is the kernel, a lambda that specifies what to do per
+    //    work item. The parameter of the lambda is the work item id.
+    // DPC++ supports unnamed lambda kernel by default.
+    h.single_task<MM>([=]() 
+      { size_t c_row = num_items[0], c_col = num_items[1];
+
+        int s = 0;
+        #pragma unroll 2
+        for (size_t k = 0; k < widthA; k++)
+          s += a[c_row][k] * b[k][c_col]; 
+
+        sum[c_row][c_col]  = c[c_row][c_col] + s;
+      });
+  });
+
+}
+
 
 //************************************
 // Demonstrate matrix multiplication both in sequential on CPU and in parallel on device.
@@ -254,7 +235,6 @@ int main() {
   for (int i = 0; i < a_rows; i++)
     for (int j = 0; j < b_columns; j++) sum_parallel[i][j] = 0.0;
 
-//  dpc::TimeInterval t;
   Timer t;
 
   try {
@@ -269,7 +249,7 @@ int main() {
               << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
-    MatrixMulti_v2(q, A, B, C, sum_parallel);
+    MatrixMulti_st(q, A, B, C, sum_parallel);
   } catch (exception const &e) {
     std::cout << "An exception is caught for matrix multiplication.\n";
     std::terminate();
@@ -300,24 +280,6 @@ int main() {
         std::cout << "not equal" << std::endl;
         return -1;
       }
-
-/*
-  // Print out the result of matrix multiplication.
-  std::cout<<"-- sum_sequential --"<<std::endl;
-  for (size_t i = 0; i < sum_sequential.row; i++) {
-    for (size_t j = 0; j < sum_sequential.column; j++) 
-      std::cout << sum_sequential.e(i,j) << " ";
-    std::cout << "\n";
-  }
-
-  // Print out the result of matrix multiplication.
-  std::cout<<"** sum_parallel **"<<std::endl;
-  for (size_t i = 0; i < sum_parallel.row; i++) {
-    for (size_t j = 0; j < sum_parallel.column; j++) 
-      std::cout << sum_parallel.e(i,j) << " ";
-    std::cout << "\n";
-  }
-*/
 
   std::cout << "Matrix multiplication successfully completed on device.\n";
   return 0;
