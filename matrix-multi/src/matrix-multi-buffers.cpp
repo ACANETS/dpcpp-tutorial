@@ -19,6 +19,20 @@
 
 using namespace sycl;
 
+using Duration = std::chrono::duration<double>;
+class Timer {
+ public:
+  Timer() : start(std::chrono::steady_clock::now()) {}
+
+  Duration elapsed() {
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<Duration>(now - start);
+  }
+
+ private:
+  std::chrono::steady_clock::time_point start;
+};
+
 class IntMatrix {
   public:
     size_t row, column;
@@ -240,10 +254,11 @@ int main() {
   for (int i = 0; i < a_rows; i++)
     for (int j = 0; j < b_columns; j++) sum_parallel[i][j] = 0.0;
 
-  dpc::Timer t;
+//  dpc::TimeInterval t;
+  Timer t;
 
   try {
-    queue q(d_selector, dpc::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler);
 
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
@@ -266,7 +281,7 @@ int main() {
   size_t widthB = b_columns;
   size_t widthC = b_columns;
 
-  dpc::Timer th;
+  Timer th;
 
   // Compute the sum of two arrays in sequential for validation.
   std::cout << "computing on host..." << std::endl;
