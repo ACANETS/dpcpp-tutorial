@@ -37,12 +37,18 @@ class Timer {
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
-constexpr size_t a_rows = 1000;
-constexpr size_t a_columns = 2000;
-constexpr size_t b_columns = 3000;
+constexpr size_t a_rows = 800;
+constexpr size_t a_columns = 1000;
+constexpr size_t b_columns = 2000;
 
-void MatrixMulti(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+class MMpara;
+
+void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
+
+  std::cout << "MatrixMultiplication using parallel_for()." << std::endl;
+
+  Timer t;
 
   // Create the range object for the arrays managed by the buffer.
   range<2> num_items{a_rows, b_columns};
@@ -72,28 +78,39 @@ void MatrixMulti(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_col
   
     // Use parallel_for to run vector addition in parallel on device. This
     // executes the kernel.
-    //    1st parameter is the number of work items.
-    //    2nd parameter is the kernel, a lambda that specifies what to do per
+    // 1st parameter is the number of work items in total and in a workgroup
+    //    In our case, we have a two-dimensional nd_range:
+    //    num_items: the global size, or 'all' the work in 2D, i.e. the size
+    //                   of the matrix Sum in 'row' and 'column' dimensions
+    //    range<2>(1,1) : the workgroup size. (1,1) means a workgroup has 1 work item 
+    //                    in each dimension 
+    // 2nd parameter is the kernel, a lambda that specifies what to do per
     //    work item. The parameter of the lambda is the work item id.
     // DPC++ supports unnamed lambda kernel by default.
-    h.parallel_for(num_items, [=](id<2> i) 
-      { size_t c_row = i[0], c_col = i[1];
+    auto kernel_range = nd_range<2>(num_items, range<2>(1,1));
+    h.parallel_for<MMpara>(kernel_range, [=](id<2> i) 
+      { size_t row = i[0], col = i[1];
 
         float s = 0;
-        #pragma unroll 2
+        //#pragma unroll 2
         for (size_t k = 0; k < widthA; k++)
-          s += a[c_row][k] * b[k][c_col]; 
+          s += a[row][k] * b[k][col]; 
 
-        sum[c_row][c_col]  = c[c_row][c_col] + s;
+        sum[row][col]  = c[row][col] + s;
       });
   });
 
+  std::cout << t.elapsed().count() << " seconds\n";
 }
 
-class MM;
+class MMst;
 
-void MatrixMulti_st(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
+
+  std::cout << "MatrixMultiplication using single_task()." << std::endl;
+
+  Timer t;
 
   // Create the range object for the arrays managed by the buffer.
   range<2> num_items{a_rows, b_columns};
@@ -126,7 +143,7 @@ void MatrixMulti_st(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_
     // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
     // using the cl::sycl::single_task API:
     //   single_task<typename kernel_lambda_name>([=](){});
-    h.single_task<MM>([=]() [[intel::kernel_args_restrict]]
+    h.single_task<MMst>([=]() [[intel::kernel_args_restrict]]
       { 
         size_t row, col;
         float s = 0;
@@ -140,6 +157,65 @@ void MatrixMulti_st(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_
       });
   });
 
+  std::cout << t.elapsed().count() << " seconds\n";
+}
+
+class MMstv2;
+
+void MatrixMulti_st_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+  float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
+
+  std::cout << "MatrixMultiplication using single_task()." << std::endl;
+
+  Timer t;
+
+  // Create the range object for the arrays managed by the buffer.
+  range<2> num_items{a_rows, b_columns};
+  size_t widthA = a_columns;
+  size_t widthB = b_columns;
+  size_t widthC = b_columns;
+
+  // Create buffers that hold the data shared between the host and the devices.
+  // The buffer destructor is responsible to copy the data back to host when it
+  // goes out of scope.
+  buffer<float, 2> a_buf(reinterpret_cast<float *>(matrix_a), range(a_rows, a_columns));
+  buffer<float, 2> b_buf(reinterpret_cast<float *>(matrix_b), range(a_columns, b_columns));
+  buffer<float, 2> c_buf(reinterpret_cast<float *>(matrix_c), num_items);
+  buffer<float, 2> sum_buf(reinterpret_cast<float *>(matrix_d_parallel), num_items);
+
+  // Submit a command group to the queue by a lambda function that contains the
+  // data access permission and device computation (kernel).
+  q.submit([&](handler &h) {
+    // Create an accessor for each buffer with access permission: read, write or
+    // read/write. The accessor is a mean to access the memory in the buffer.
+    auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto c = c_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+
+    // The sum_accessor is used to store (with write permission) the sum data.
+    auto sum = sum_buf.get_access<access::mode::write>(h);
+  
+    // Use single_task to run vector addition in parallel on device. This
+    // executes the kernel.
+    // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
+    // using the cl::sycl::single_task API:
+    //   single_task<typename kernel_lambda_name>([=](){});
+    h.single_task<MMstv2>([=]() [[intel::kernel_args_restrict]]
+      { 
+        float s = 0;
+        for (size_t i = 0; i < a_rows * b_columns; i++) {
+          size_t row, col;
+          row = i / widthC;
+          col = i % widthC;          
+          #pragma unroll 2
+          for (size_t k = 0; k < widthA; k++)
+            s += a[row][k] * b[k][col]; 
+          sum[row][col]  = c[row][col] + s;
+        }
+      });
+  });
+
+  std::cout << t.elapsed().count() << " seconds\n";
 }
 
 
@@ -204,7 +280,16 @@ int main() {
   for (int i = 0; i < a_rows; i++)
     for (int j = 0; j < b_columns; j++) sum_parallel[i][j] = 0.0;
 
-  Timer t;
+  Timer th;
+  // Compute the sum of two arrays in sequential for validation.
+  std::cout << "computing on host..." << std::endl;
+  for (size_t i = 0; i < a_rows; i++)
+    for (size_t j = 0; j < b_columns; j++) {
+      sum_sequential[i][j] = C[i][j];
+      for (size_t k = 0; k < a_columns; k++)
+        sum_sequential[i][j] += A[i][k] * B[k][j];
+    }
+  std::cout << th.elapsed().count() << " seconds\n";
 
   try {
     queue q(d_selector, dpc_common::exception_handler);
@@ -218,38 +303,45 @@ int main() {
               << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
-    MatrixMulti_st(q, A, B, C, sum_parallel);
+    MatrixMulti_para(q, A, B, C, sum_parallel);
+
+    // Verify that the two arrays are equal.
+    for (size_t i = 0; i < a_rows; i++)
+      for (size_t j = 0; j < b_columns; j++) 
+        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
+          std::cout << "not equal" << std::endl;
+          return -1;
+        }
+    std::cout << "Matrix multiplication successfully completed on device.\n";
+
+    // Matrix multiplication in DPC++
+    MatrixMulti_st_v1(q, A, B, C, sum_parallel);
+
+    // Verify that the two arrays are equal.
+    for (size_t i = 0; i < a_rows; i++)
+      for (size_t j = 0; j < b_columns; j++) 
+        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
+          std::cout << "not equal" << std::endl;
+          return -1;
+        }
+    std::cout << "Matrix multiplication successfully completed on device.\n";
+
+    // Matrix multiplication in DPC++
+    MatrixMulti_st_v2(q, A, B, C, sum_parallel);
+
+    // Verify that the two arrays are equal.
+    for (size_t i = 0; i < a_rows; i++)
+      for (size_t j = 0; j < b_columns; j++) 
+        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
+          std::cout << "not equal" << std::endl;
+          return -1;
+        }
+    std::cout << "Matrix multiplication successfully completed on device.\n";
+
   } catch (exception const &e) {
     std::cout << "An exception is caught for matrix multiplication.\n";
     std::terminate();
   }
 
-  std::cout << t.elapsed().count() << " seconds\n";
-
-  size_t widthA = a_columns;
-  size_t widthB = b_columns;
-  size_t widthC = b_columns;
-
-  Timer th;
-
-  // Compute the sum of two arrays in sequential for validation.
-  std::cout << "computing on host..." << std::endl;
-  for (size_t i = 0; i < a_rows; i++)
-    for (size_t j = 0; j < b_columns; j++) {
-      sum_sequential[i][j] = C[i][j];
-      for (size_t k = 0; k < widthA; k++)
-        sum_sequential[i][j] += A[i][k] * B[k][j];
-    }
-  std::cout << th.elapsed().count() << " seconds\n";
-
-  // Verify that the two arrays are equal.
-  for (size_t i = 0; i < a_rows; i++)
-    for (size_t j = 0; j < b_columns; j++) 
-      if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
-        std::cout << "not equal" << std::endl;
-        return -1;
-      }
-
-  std::cout << "Matrix multiplication successfully completed on device.\n";
   return 0;
 }
