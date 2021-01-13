@@ -52,9 +52,6 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
 
   // Create the range object for the arrays managed by the buffer.
   range<2> num_items{a_rows, b_columns};
-  size_t widthA = a_columns;
-  size_t widthB = b_columns;
-  size_t widthC = b_columns;
 
   // Create buffers that hold the data shared between the host and the devices.
   // The buffer destructor is responsible to copy the data back to host when it
@@ -93,7 +90,7 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
 
         float s = 0;
         //#pragma unroll 2
-        for (size_t k = 0; k < widthA; k++)
+        for (size_t k = 0; k < a_columns; k++)
           s += a[row][k] * b[k][col]; 
 
         sum[row][col]  = c[row][col] + s;
@@ -103,7 +100,7 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
   std::cout << t.elapsed().count() << " seconds\n";
 }
 
-class MMst;
+class MMstv1;
 
 void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
@@ -114,9 +111,6 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 
   // Create the range object for the arrays managed by the buffer.
   range<2> num_items{a_rows, b_columns};
-  size_t widthA = a_columns;
-  size_t widthB = b_columns;
-  size_t widthC = b_columns;
 
   // Create buffers that hold the data shared between the host and the devices.
   // The buffer destructor is responsible to copy the data back to host when it
@@ -143,14 +137,14 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
     // using the cl::sycl::single_task API:
     //   single_task<typename kernel_lambda_name>([=](){});
-    h.single_task<MMst>([=]() [[intel::kernel_args_restrict]]
+    h.single_task<MMstv1>([=]() [[intel::kernel_args_restrict]]
       { 
         size_t row, col;
         float s = 0;
         for (row = 0; row < a_rows; row++)
           for (col = 0; col < b_columns; col++) {
             #pragma unroll 2
-            for (size_t k = 0; k < widthA; k++)
+            for (size_t k = 0; k < a_columns; k++)
               s += a[row][k] * b[k][col]; 
             sum[row][col]  = c[row][col] + s;
           }
@@ -208,7 +202,7 @@ void MatrixMulti_st_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           row = i / widthC;
           col = i % widthC;          
           #pragma unroll 2
-          for (size_t k = 0; k < widthA; k++)
+          for (size_t k = 0; k < a_columns; k++)
             s += a[row][k] * b[k][col]; 
           sum[row][col]  = c[row][col] + s;
         }
