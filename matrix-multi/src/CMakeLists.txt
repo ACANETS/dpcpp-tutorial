@@ -2,6 +2,7 @@ set(SOURCE_FILE matrix-multi-buffers.cpp)
 set(TARGET_NAME matrix-multi-buffers)
 set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
 set(FPGA_TARGET ${TARGET_NAME}.fpga)
+set(FPGA_PROFILE_TARGET ${TARGET_NAME}.fpga_profile)
 
 # FPGA board selection
 set(A10_PAC_BOARD_NAME "intel_a10gx_pac:pac_a10")
@@ -24,6 +25,7 @@ set(EMULATOR_LINK_FLAGS "-fintelfpga")
 set(HARDWARE_COMPILE_FLAGS "-fintelfpga")
 set(HARDWARE_LINK_FLAGS "-fintelfpga -Xshardware -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
 # use cmake -D USER_HARDWARE_FLAGS=<flags> to set extra flags for FPGA backend compilation
+set(HARDWARE_PROFILE_LINK_FLAGS "-fintelfpga -Xshardware -Xsprofile -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
 
 
 # FPGA emulator
@@ -69,3 +71,14 @@ else()
                        COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS_LIST} ${HARDWARE_LINK_FLAGS_LIST} -fsycl-link ${SOURCE_FILE} -o ${CMAKE_BINARY_DIR}/${DEVICE_OBJ_FILE}
                        DEPENDS ${SOURCE_FILE})
 endif()
+
+# FPGA hardware profiling
+if(WIN32)
+    add_custom_target(fpga_profile COMMAND echo "An FPGA hardware target is not provided on Windows. See README for details.")
+else()
+    add_executable(${FPGA_PROFILE_TARGET} EXCLUDE_FROM_ALL ${SOURCE_FILE})
+    add_custom_target(fpga_profile DEPENDS ${FPGA_PROFILE_TARGET})
+    set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES COMPILE_FLAGS ${HARDWARE_COMPILE_FLAGS})
+    set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES LINK_FLAGS ${HARDWARE_PROFILE_LINK_FLAGS})
+endif()
+
