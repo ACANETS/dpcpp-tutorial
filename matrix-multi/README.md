@@ -1,6 +1,6 @@
 # `matrix-multiplication` Sample
 
-We use matrix multiplication example to show how to design data parallel programs. Using it, we demonstrate how "thinking-in-parallel" helps leverage the parallelism in a task and implement it in DPC++. We also include a few examples for analyzing and optimizing the design. Specifically we show how to use compilation reports to analyze a design and how to perform run-time profiling.
+We use matrix multiplication example to show how to design data parallel programs. Using it, we demonstrate how "thinking-in-parallel" helps leverage the parallelism in a task and implement it in DPC++. We also include a few examples for analyzing and optimizing the design. Specifically we show how to use compilation reports to analyze a design and how to perform run-time profiling. A few design options are compared side by side in terms of programming APIs, resource utilization, area and performance.
 
 | Optimized for                     | Description
 |:---                               |:---
