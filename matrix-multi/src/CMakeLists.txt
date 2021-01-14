@@ -22,7 +22,7 @@ endif()
 # Flags
 set(EMULATOR_COMPILE_FLAGS "-fintelfpga -DFPGA_EMULATOR")
 set(EMULATOR_LINK_FLAGS "-fintelfpga")
-set(HARDWARE_COMPILE_FLAGS "-fintelfpga")
+set(HARDWARE_COMPILE_FLAGS "-fintelfpga -DFPGA")
 set(HARDWARE_LINK_FLAGS "-fintelfpga -Xshardware -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
 # use cmake -D USER_HARDWARE_FLAGS=<flags> to set extra flags for FPGA backend compilation
 set(HARDWARE_PROFILE_LINK_FLAGS "-fintelfpga -Xshardware -Xsprofile -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
