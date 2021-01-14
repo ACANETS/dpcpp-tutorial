@@ -15,7 +15,6 @@ report: image-conv_report.a
 image-conv.fpga_emu: $(SRC)
 	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
 
-
 a.o: $(SRC)
 	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
 
