@@ -25,6 +25,7 @@ set(EMULATOR_LINK_FLAGS "-fintelfpga")
 set(HARDWARE_COMPILE_FLAGS "-fintelfpga -DFPGA")
 set(HARDWARE_LINK_FLAGS "-fintelfpga -Xshardware -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
 # use cmake -D USER_HARDWARE_FLAGS=<flags> to set extra flags for FPGA backend compilation
+set(HARDWARE_PROFILE_COMPILE_FLAGS "-fintelfpga -DFPGA_PROFILE")
 set(HARDWARE_PROFILE_LINK_FLAGS "-fintelfpga -Xshardware -Xsprofile -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
 
 
@@ -78,7 +79,7 @@ if(WIN32)
 else()
     add_executable(${FPGA_PROFILE_TARGET} EXCLUDE_FROM_ALL ${SOURCE_FILE})
     add_custom_target(fpga_profile DEPENDS ${FPGA_PROFILE_TARGET})
-    set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES COMPILE_FLAGS ${HARDWARE_COMPILE_FLAGS})
+    set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES COMPILE_FLAGS ${HARDWARE_PROFILE_COMPILE_FLAGS})
     set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES LINK_FLAGS ${HARDWARE_PROFILE_LINK_FLAGS})
 endif()
 

@@ -85,7 +85,7 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
     //    work item. The parameter of the lambda is the work item id.
     // DPC++ supports unnamed lambda kernel by default.
     auto kernel_range = nd_range<2>(num_items, range<2>(1,1));
-    h.parallel_for<MMpara>(kernel_range, [=](id<2> i) 
+    h.parallel_for<MMpara>(num_items, [=](id<2> i) 
       { size_t row = i[0], col = i[1];
 
         float s = 0;
@@ -159,7 +159,7 @@ class MMstv2;
 void MatrixMulti_st_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
 
-  std::cout << "MatrixMultiplication using single_task()." << std::endl;
+  std::cout << "MatrixMultiplication using single_task() v2." << std::endl;
 
   Timer t;
 
@@ -197,6 +197,7 @@ void MatrixMulti_st_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     h.single_task<MMstv2>([=]() [[intel::kernel_args_restrict]]
       { 
         float s = 0;
+        #pragma unroll 4
         for (size_t i = 0; i < a_rows * b_columns; i++) {
           size_t row, col;
           row = i / widthC;
@@ -221,7 +222,7 @@ int main() {
 #if FPGA_EMULATOR
   // DPC++ extension: FPGA emulator selector on systems without FPGA card.
   INTEL::fpga_emulator_selector d_selector;
-#elif FPGA
+#elif defined(FPGA) || defined(FPGA_PROFILE)
   // DPC++ extension: FPGA selector on systems with FPGA card.
   INTEL::fpga_selector d_selector;
 #else
@@ -265,15 +266,19 @@ int main() {
     for (int j = 0; j < b_columns; j++) C[i][j] = 3.0;
 
   float(*sum_sequential)[b_columns] = new float[a_rows][b_columns];
-  // Intialize values
-  for (int i = 0; i < a_rows; i++)
-    for (int j = 0; j < b_columns; j++) sum_sequential[i][j] = 0.0;
-
   float(*sum_parallel)[b_columns] = new float[a_rows][b_columns];
+  float(*sum_stv1)[b_columns] = new float[a_rows][b_columns];
+  float(*sum_stv2)[b_columns] = new float[a_rows][b_columns];
   // Intialize values
   for (int i = 0; i < a_rows; i++)
-    for (int j = 0; j < b_columns; j++) sum_parallel[i][j] = 0.0;
+    for (int j = 0; j < b_columns; j++) {
+      sum_sequential[i][j] = 0.0;
+      sum_parallel[i][j] = 0.0;
+      sum_stv1[i][j] = 0.0;
+      sum_stv2[i][j] = 0.0;
+    }
 
+#ifndef FPGA_PROFILE
   Timer th;
   // Compute the sum of two arrays in sequential for validation.
   std::cout << "computing on host..." << std::endl;
@@ -284,6 +289,7 @@ int main() {
         sum_sequential[i][j] += A[i][k] * B[k][j];
     }
   std::cout << th.elapsed().count() << " seconds\n";
+#endif
 
   try {
     queue q(d_selector, dpc_common::exception_handler);
@@ -299,6 +305,7 @@ int main() {
     // Matrix multiplication in DPC++
     MatrixMulti_para(q, A, B, C, sum_parallel);
 
+#ifndef FPGA_PROFILE
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
@@ -307,22 +314,26 @@ int main() {
           return -1;
         }
     std::cout << "Matrix multiplication successfully completed on device.\n";
+#endif
 
     // Matrix multiplication in DPC++
-    MatrixMulti_st_v1(q, A, B, C, sum_parallel);
+    MatrixMulti_st_v1(q, A, B, C, sum_stv1);
 
+#ifndef FPGA_PROFILE
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
-        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
+        if( (sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
           std::cout << "not equal" << std::endl;
           return -1;
         }
     std::cout << "Matrix multiplication successfully completed on device.\n";
+#endif
 
     // Matrix multiplication in DPC++
-    MatrixMulti_st_v2(q, A, B, C, sum_parallel);
+    MatrixMulti_st_v2(q, A, B, C, sum_stv2);
 
+#ifndef FPGA_PROFILE
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
@@ -331,6 +342,7 @@ int main() {
           return -1;
         }
     std::cout << "Matrix multiplication successfully completed on device.\n";
+#endif
 
   } catch (exception const &e) {
     std::cout << "An exception is caught for matrix multiplication.\n";
