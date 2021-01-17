@@ -13,7 +13,7 @@
 #include <array>
 #include <iostream>
 #include "dpc_common.hpp"
-#if FPGA || FPGA_EMULATOR
+#if FPGA || FPGA_EMULATOR || FPGA_PROFILE
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 #endif
 
@@ -303,20 +303,6 @@ int main() {
               << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
-    MatrixMulti_para(q, A, B, C, sum_parallel);
-
-#ifndef FPGA_PROFILE
-    // Verify that the two arrays are equal.
-    for (size_t i = 0; i < a_rows; i++)
-      for (size_t j = 0; j < b_columns; j++) 
-        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
-          std::cout << "not equal" << std::endl;
-          return -1;
-        }
-    std::cout << "Matrix multiplication successfully completed on device.\n";
-#endif
-
-    // Matrix multiplication in DPC++
     MatrixMulti_st_v1(q, A, B, C, sum_stv1);
 
 #ifndef FPGA_PROFILE
@@ -324,6 +310,20 @@ int main() {
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
         if( (sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
+          std::cout << "not equal" << std::endl;
+          return -1;
+        }
+    std::cout << "Matrix multiplication successfully completed on device.\n";
+#endif
+
+    // Matrix multiplication in DPC++
+    MatrixMulti_para(q, A, B, C, sum_parallel);
+
+#ifndef FPGA_PROFILE
+    // Verify that the two arrays are equal.
+    for (size_t i = 0; i < a_rows; i++)
+      for (size_t j = 0; j < b_columns; j++) 
+        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
           std::cout << "not equal" << std::endl;
           return -1;
         }
