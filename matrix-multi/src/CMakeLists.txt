@@ -1,6 +1,6 @@
 set(SOURCE_FILE matrix-multi-buffers.cpp)
+file( GLOB SOURCE_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp)
 set(TARGET_NAME matrix-multi-buffers)
-set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
 set(FPGA_TARGET ${TARGET_NAME}.fpga)
 set(FPGA_PROFILE_TARGET ${TARGET_NAME}.fpga_profile)
 
@@ -38,10 +38,15 @@ if(WIN32)
                        COMMAND ${CMAKE_CXX_COMPILER} /EHsc ${WIN_EMULATOR_COMPILE_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE_FILE} -o ${CMAKE_BINARY_DIR}/${WIN_EMULATOR_TARGET}
                        DEPENDS ${SOURCE_FILE})
 else()
-    add_executable(${EMULATOR_TARGET} ${SOURCE_FILE})
-    add_custom_target(fpga_emu DEPENDS ${EMULATOR_TARGET})
-    set_target_properties(${EMULATOR_TARGET} PROPERTIES COMPILE_FLAGS ${EMULATOR_COMPILE_FLAGS})
-    set_target_properties(${EMULATOR_TARGET} PROPERTIES LINK_FLAGS ${EMULATOR_LINK_FLAGS})
+    foreach( testsourcefile ${SOURCE_FILES} )
+        # replace file suffix to create executable file name
+        string( REPLACE ".cpp" ".fpga_emu" testname ${testsourcefile} )
+        add_executable( ${testname} ${testsourcefile} )
+        get_filename_component(barename ${testname} NAME)
+        add_custom_target(${barename}.fpga_emu DEPENDS ${testname})
+        set_target_properties(${barename} PROPERTIES COMPILE_FLAGS ${EMULATOR_COMPILE_FLAGS})
+        set_target_properties(${barename} PROPERTIES LINK_FLAGS ${EMULATOR_LINK_FLAGS})
+    endforeach( testsourcefile ${SOURCE_FILES} )
 endif()
 
 # FPGA hardware
