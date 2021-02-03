@@ -42,7 +42,7 @@ This code sample is licensed under MIT license.
 * make profile : generate FPGA binary to be used in run-time profiling. Will take a couple of hours.
 
 *A Makefile is still maintained in the directory, however, the usage of it is disencouraged.*
-
+/*
 1. Clean the `matrix-muti` program using:
     ```
     make clean -f Makefile.fpga
@@ -64,6 +64,7 @@ This code sample is licensed under MIT license.
     ```
     make report -f Makefile.fpga
     ```
+*/
 
 ## Running the Sample
 
