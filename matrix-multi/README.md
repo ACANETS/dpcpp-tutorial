@@ -25,22 +25,22 @@ This code sample is licensed under MIT license.
 
 ### On a Linux* System
 
-The project uses CMake. Perform the following steps to build different targets. 
+**The project uses CMake. Perform the following steps to build different targets.** 
 
-    ```
+```
     mkdir build
     cd build
     cmake ..
     make
     make report
     make fpga
-    ```
+```
     * make : by default, the emulation executables are built.
     * make report : generate static report on the FPGA resource utilization of the designs
     * make fpga : generate FPGA binary files for the designs
     * make profile : generate FPGA binary to be used in run-time profiling. 
 
-A Makefile is still maintained in the directory, however, the usage of it is disencouraged.
+*A Makefile is still maintained in the directory, however, the usage of it is disencouraged.*
 
 1. Clean the `matrix-muti` program using:
     ```
