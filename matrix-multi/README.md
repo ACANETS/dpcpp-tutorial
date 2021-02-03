@@ -34,11 +34,12 @@ This code sample is licensed under MIT license.
     make
     make report
     make fpga
+    make profile
 ```
-    * make : by default, the emulation executables are built.
-    * make report : generate static report on the FPGA resource utilization of the designs
-    * make fpga : generate FPGA binary files for the designs
-    * make profile : generate FPGA binary to be used in run-time profiling. 
+* make : by default, the emulation executables are built.
+* make report : generate static report on the FPGA resource utilization of the designs.
+* make fpga : generate FPGA binary files for the designs. Will take a couple of hours.
+* make profile : generate FPGA binary to be used in run-time profiling. Will take a couple of hours.
 
 *A Makefile is still maintained in the directory, however, the usage of it is disencouraged.*
 
