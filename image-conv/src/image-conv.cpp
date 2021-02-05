@@ -24,6 +24,21 @@ using namespace sycl;
 #include "bmp-utils.h"
 #include "gold.h"
 
+
+using Duration = std::chrono::duration<double>;
+class Timer {
+ public:
+  Timer() : start(std::chrono::steady_clock::now()) {}
+
+  Duration elapsed() {
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<Duration>(now - start);
+  }
+
+ private:
+  std::chrono::steady_clock::time_point start;
+};
+
 static const char* inputImagePath = "./Images/cat.bmp";
 
 static float gaussianBlurFilterFactor = 273.0f;
@@ -268,10 +283,10 @@ int main() {
     hOutputImage[i] = 1234.0;
 
 
-  dpc::Timer t;
+  Timer t;
 
   try {
-    queue q(d_selector, dpc::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler);
 
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
