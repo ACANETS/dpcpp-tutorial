@@ -42,6 +42,20 @@ using namespace sycl;
 #include "bmp-utils.h"
 #include "gold.h"
 
+using Duration = std::chrono::duration<double>;
+class Timer {
+ public:
+  Timer() : start(std::chrono::steady_clock::now()) {}
+
+  Duration elapsed() {
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<Duration>(now - start);
+  }
+
+ private:
+  std::chrono::steady_clock::time_point start;
+};
+
 static const char* inputImagePath = "./Images/cat.bmp";
 
 static float gaussianBlurFilterFactor = 273.0f;
@@ -149,7 +163,6 @@ float4 *pixel2rgba(float *image_in, size_t ImageRows, size_t ImageCols, image_ch
 void ImageConv(queue &q, void *image_in, void *image_out, float *filter_in, 
     const size_t FilterWidth, size_t ImageRows, size_t ImageCols) 
 {
-
     // We create images for the input and output data.
     // Images objects are created from a host pointer together with provided 
     // channel order and channel type. 
@@ -278,7 +291,8 @@ int main() {
   INTEL::fpga_selector d_selector;
 #else
   // The default device selector will select the most performant device.
-  default_selector d_selector;
+  //default_selector d_selector;
+  cpu_selector d_selector;
 #endif
 
   float *hInputImage;
@@ -358,10 +372,10 @@ int main() {
     hOutputImage[i] = 1234.0;
 
 
-  dpc::Timer t;
+  Timer t;
 
   try {
-    queue q(d_selector, dpc::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler);
 
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
@@ -391,7 +405,7 @@ int main() {
   bool passed = true;
   for (i = 0; i < imageRows*imageCols; i++) {
     if (fabsf(refOutput[i]-hOutputImage[i]) > 0.001f) {
-        printf("%f %f\n", refOutput[i], hOutputImage[i]);
+        //printf("%f %f\n", refOutput[i], hOutputImage[i]);
         passed = false;
     }
   }

@@ -3,6 +3,7 @@ set(TARGET_NAME image-conv)
 set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
 set(FPGA_TARGET ${TARGET_NAME}.fpga)
 set(FPGA_PROFILE_TARGET ${TARGET_NAME}.fpga_profile)
+set(SOURCE_FILE_IMAGE image-conv-image.cpp)
 
 # FPGA board selection
 set(A10_PAC_BOARD_NAME "intel_a10gx_pac:pac_a10")
@@ -44,6 +45,24 @@ else()
     set_target_properties(${EMULATOR_TARGET} PROPERTIES LINK_FLAGS ${EMULATOR_LINK_FLAGS})
     # to link with functions in Utils library (definded in Utils/ folder)
     target_link_libraries (${EMULATOR_TARGET} LINK_PUBLIC Utils)
+endif()
+
+# CPU or GPU that supports "image" APIs
+if(WIN32)
+    add_custom_target(nofpga COMMAND echo "Non-FPGA emulation on Windows. not tested. See README for details.")
+    set(WIN_EMULATOR_TARGET ${EMULATOR_TARGET}.exe)
+    add_custom_target(nofpga DEPENDS ${WIN_EMULATOR_TARGET})
+    separate_arguments(WIN_EMULATOR_COMPILE_FLAGS WINDOWS_COMMAND "${EMULATOR_COMPILE_FLAGS}")
+    add_custom_command(OUTPUT ${WIN_EMULATOR_TARGET} 
+                       COMMAND ${CMAKE_CXX_COMPILER} /EHsc ${WIN_EMULATOR_COMPILE_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE_FILE} -o ${CMAKE_BINARY_DIR}/${WIN_EMULATOR_TARGET}
+                       DEPENDS ${SOURCE_FILE})
+else()
+    add_executable(${TARGET_NAME} ${SOURCE_FILE_IMAGE})
+    add_custom_target(nofpga DEPENDS ${TARGET_NAME})
+    #set_target_properties(${EMULATOR_TARGET} PROPERTIES COMPILE_FLAGS ${EMULATOR_COMPILE_FLAGS})
+    #set_target_properties(${EMULATOR_TARGET} PROPERTIES LINK_FLAGS ${EMULATOR_LINK_FLAGS})
+    # to link with functions in Utils library (definded in Utils/ folder)
+    target_link_libraries (${TARGET_NAME} LINK_PUBLIC Utils)
 endif()
 
 # FPGA hardware
