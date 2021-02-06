@@ -57,7 +57,7 @@ else()
     set_target_properties(${FPGA_TARGET} PROPERTIES COMPILE_FLAGS ${HARDWARE_COMPILE_FLAGS})
     set_target_properties(${FPGA_TARGET} PROPERTIES LINK_FLAGS ${HARDWARE_LINK_FLAGS})
     # to link with functions in Utils library (definded in Utils/ folder)
-    target_link_libraries (${EMULATOR_TARGET} LINK_PUBLIC Utils)
+    target_link_libraries (${FPGA_TARGET} LINK_PUBLIC Utils)
 endif()
 
 # Generate report
@@ -107,6 +107,6 @@ else()
     set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES COMPILE_FLAGS ${HARDWARE_PROFILE_COMPILE_FLAGS})
     set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES LINK_FLAGS ${HARDWARE_PROFILE_LINK_FLAGS})
     # to link with functions in Utils library (definded in Utils/ folder)
-    target_link_libraries (${EMULATOR_TARGET} LINK_PUBLIC Utils)
+    target_link_libraries (${FPGA_PROFILE_TARGET} LINK_PUBLIC Utils)
 endif()
 
