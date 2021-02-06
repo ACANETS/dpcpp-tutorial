@@ -13,7 +13,7 @@
 #include <array>
 #include <iostream>
 #include "dpc_common.hpp"
-#if FPGA || FPGA_EMULATOR
+#if FPGA || FPGA_EMULATOR || FPGA_PROFILE
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 #endif
 
@@ -199,7 +199,7 @@ int main() {
 #if FPGA_EMULATOR
   // DPC++ extension: FPGA emulator selector on systems without FPGA card.
   INTEL::fpga_emulator_selector d_selector;
-#elif FPGA
+#elif FPGA || FPGA_PROFILE
   // DPC++ extension: FPGA selector on systems with FPGA card.
   INTEL::fpga_selector d_selector;
 #else
@@ -219,6 +219,7 @@ int main() {
   float filterFactor;
   float *filter;
 
+#ifndef FPGA_PROFILE
   // Query about the platform
   unsigned number = 0;
   auto myPlatforms = platform::get_platforms();
@@ -234,6 +235,7 @@ int main() {
     }
   }
   std::cout<<std::endl;
+#endif
 
   // set conv filter
   switch (filterSelection)
@@ -306,6 +308,7 @@ int main() {
   writeBmpFloat(hOutputImage, "cat-filtered.bmp", imageRows, imageCols,
           inputImagePath);
 
+#ifndef FPGA_PROFILE
   /* Verify result */
   float *refOutput = convolutionGoldFloat(hInputImage, imageRows, imageCols,
     filter, filterWidth);
@@ -327,6 +330,7 @@ int main() {
   else {
     printf("Failed!\n");
   }
+#endif
 
   return 0;
 }
