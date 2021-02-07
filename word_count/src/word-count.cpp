@@ -38,6 +38,20 @@
 
 using namespace sycl;
 
+using Duration = std::chrono::duration<double>;
+class Timer {
+ public:
+  Timer() : start(std::chrono::steady_clock::now()) {}
+
+  Duration elapsed() {
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<Duration>(now - start);
+  }
+
+ private:
+  std::chrono::steady_clock::time_point start;
+};
+
 #define TEXT_FILE "kafka.txt"
 #define MAX_TEXT_LEN 20000000
 // number of keywords to search
@@ -218,10 +232,10 @@ int main() {
   }
   std::cout<<std::endl;
 
-  dpc::Timer t;
+  Timer t;
 
   try {
-    queue q(d_selector, dpc::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler);
 
     device dev = q.get_device();
 
