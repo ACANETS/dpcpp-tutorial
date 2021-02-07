@@ -185,7 +185,7 @@ int main() {
 #if FPGA_EMULATOR
   // DPC++ extension: FPGA emulator selector on systems without FPGA card.
   INTEL::fpga_emulator_selector d_selector;
-#elif FPGA
+#elif FPGA || FPGA_PROFILE
   // DPC++ extension: FPGA selector on systems with FPGA card.
   INTEL::fpga_selector d_selector;
 #else
@@ -216,6 +216,7 @@ int main() {
   fread(text, sizeof(char), text_size, text_handle);
   fclose(text_handle);
 
+#ifndef FPGA_PROFILE
   // Query about the platform
   unsigned number = 0;
   auto myPlatforms = platform::get_platforms();
@@ -231,6 +232,7 @@ int main() {
     }
   }
   std::cout<<std::endl;
+#endif
 
   Timer t;
 
@@ -300,7 +302,7 @@ int main() {
 
   // reduce the final results in global memory
   for(int i=0; i < NUM_KEYWORDS; i++)
-    std::cout << "keyword " << i << "appears " << result[i] << " times" << std::endl;
+    std::cout << "keyword " << i << " appears " << result[i] << " times" << std::endl;
 
   std::cout << t.elapsed().count() << " seconds\n";
 
