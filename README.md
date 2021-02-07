@@ -3,7 +3,7 @@ Lab exercises on Data Parallel Computing and DPC++ for Intel FPGA.
 
 ## Module 1: Introduction to Data Parallel Computing and DPC++
 
-We use matrix multiplication as a starting point to introduce data parallel computing. (A Surprise ;)
+We use [matrix multiplication](https://github.com/ACANETS/dpcpp-tutorial/tree/master/matrix-multi) as a starting point to introduce data parallel computing. (A Surprise ;)
 This example shows different programming APIs for defining kernel functions that compute on partitions of data. We also demonstrate the usage of analysis and optimization tools on the designes target for Intel FPGAs.
 
 ## Module 2: Image Convolution
