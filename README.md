@@ -8,11 +8,11 @@ This example shows different programming APIs for defining kernel functions that
 
 ## Module 2: Image Convolution
 
-Image convolution is an image processing operator to add pixel values to their neighbors weighted by a kernel (aka convolutional matrix). It can generate interesting effects on the original image such as edge detection or blurring, and has inherent parallelism. We will show how to implement the convolution operation in DPC++ and optimize the design.
+[Image convolution](https://github.com/ACANETS/dpcpp-tutorial/tree/master/image-conv) is an image processing operator to add pixel values to their neighbors weighted by a kernel (aka convolutional matrix). It can generate interesting effects on the original image such as edge detection or blurring, and has inherent parallelism. We will show how to implement the convolution operation in DPC++ and optimize the design.
 
 ## Module 3: Word Count 
 
-Word count is an example application leveraging Map-Reduce, which decomposes the data with a "split-apply-combine" strategy for data analysis. We show how to design a kernel function to count the number of words in a document using Map-Reduce.
+[Word count](https://github.com/ACANETS/dpcpp-tutorial/tree/master/word-count) is an example application leveraging Map-Reduce, which decomposes the data with a "split-apply-combine" strategy for data analysis. We show how to design a kernel function to count the number of words in a document using Map-Reduce.
 
 ## Module 4: Count-Min Sketch
 
