@@ -37,9 +37,9 @@ class Timer {
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
-constexpr size_t a_rows = 800;
-constexpr size_t a_columns = 1000;
-constexpr size_t b_columns = 2000;
+constexpr size_t a_rows = 1000;
+constexpr size_t a_columns = 2000;
+constexpr size_t b_columns = 4000;
 
 class MMstv2;
 

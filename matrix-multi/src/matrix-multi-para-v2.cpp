@@ -37,11 +37,11 @@ class Timer {
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
-constexpr size_t a_rows = 800;
-constexpr size_t a_columns = 1000;
-constexpr size_t b_columns = 2000;
+constexpr size_t a_rows = 1000;
+constexpr size_t a_columns = 2000;
+constexpr size_t b_columns = 4000;
 
-class MMpara;
+class MMpara_v2;
 
 void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
@@ -85,11 +85,11 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
     //    work item. The parameter of the lambda is the work item id.
     // DPC++ supports unnamed lambda kernel by default.
     auto kernel_range = nd_range<2>(num_items, range<2>(1,1));
-    h.parallel_for<MMpara>(num_items, [=](id<2> i) 
+    h.parallel_for<MMpara_v2>(num_items, [=](id<2> i) 
       { size_t row = i[0], col = i[1];
 
         float s = 0;
-        //#pragma unroll 2
+        #pragma unroll 4
         for (size_t k = 0; k < a_columns; k++)
           s += a[row][k] * b[k][col]; 
 

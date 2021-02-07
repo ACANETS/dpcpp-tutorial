@@ -41,12 +41,12 @@ constexpr size_t a_rows = 1000;
 constexpr size_t a_columns = 2000;
 constexpr size_t b_columns = 4000;
 
-class MMstv1;
+class MMpara_v1;
 
-void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
+void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
 
-  std::cout << "MatrixMultiplication using single_task()." << std::endl;
+  std::cout << "MatrixMultiplication using parallel_for()." << std::endl;
 
   Timer t;
 
@@ -73,28 +73,32 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     // The sum_accessor is used to store (with write permission) the sum data.
     auto sum = sum_buf.get_access<access::mode::write>(h);
   
-    // Use single_task to run vector addition in parallel on device. This
+    // Use parallel_for to run vector addition in parallel on device. This
     // executes the kernel.
-    // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
-    // using the cl::sycl::single_task API:
-    //   single_task<typename kernel_lambda_name>([=](){});
-    h.single_task<MMstv1>([=]() [[intel::kernel_args_restrict]]
-      { 
-        size_t row, col;
+    // 1st parameter is the number of work items in total and in a workgroup
+    //    In our case, we have a two-dimensional nd_range:
+    //    num_items: the global size, or 'all' the work in 2D, i.e. the size
+    //                   of the matrix Sum in 'row' and 'column' dimensions
+    //    range<2>(1,1) : the workgroup size. (1,1) means a workgroup has 1 work item 
+    //                    in each dimension 
+    // 2nd parameter is the kernel, a lambda that specifies what to do per
+    //    work item. The parameter of the lambda is the work item id.
+    // DPC++ supports unnamed lambda kernel by default.
+    auto kernel_range = nd_range<2>(num_items, range<2>(1,1));
+    h.parallel_for<MMpara_v1>(num_items, [=](id<2> i) 
+      { size_t row = i[0], col = i[1];
+
         float s = 0;
-        for (row = 0; row < a_rows; row++)
-          for (col = 0; col < b_columns; col++) {
-            #pragma unroll 2
-            for (size_t k = 0; k < a_columns; k++)
-              s += a[row][k] * b[k][col]; 
-            sum[row][col]  = c[row][col] + s;
-          }
+        //#pragma unroll 2
+        for (size_t k = 0; k < a_columns; k++)
+          s += a[row][k] * b[k][col]; 
+
+        sum[row][col]  = c[row][col] + s;
       });
   });
 
   std::cout << t.elapsed().count() << " seconds\n";
 }
-
 
 //************************************
 // Demonstrate matrix multiplication both in sequential on CPU and in parallel on device.
@@ -148,13 +152,12 @@ int main() {
     for (int j = 0; j < b_columns; j++) C[i][j] = 3.0;
 
   float(*sum_sequential)[b_columns] = new float[a_rows][b_columns];
-  float(*sum_stv1)[b_columns] = new float[a_rows][b_columns];
-
+  float(*sum_parallel)[b_columns] = new float[a_rows][b_columns];
   // Intialize values
   for (int i = 0; i < a_rows; i++)
     for (int j = 0; j < b_columns; j++) {
       sum_sequential[i][j] = 0.0;
-      sum_stv1[i][j] = 0.0;
+      sum_parallel[i][j] = 0.0;
     }
 
 #ifndef FPGA_PROFILE
@@ -182,13 +185,13 @@ int main() {
               << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
-    MatrixMulti_st_v1(q, A, B, C, sum_stv1);
+    MatrixMulti_para(q, A, B, C, sum_parallel);
 
 #ifndef FPGA_PROFILE
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
-        if( (sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
+        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
           std::cout << "not equal" << std::endl;
           return -1;
         }
