@@ -23,9 +23,9 @@ using namespace sycl;
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
-constexpr size_t a_rows = 1000;
-constexpr size_t a_columns = 2000;
-constexpr size_t b_columns = 3000;
+constexpr size_t a_rows = 800;
+constexpr size_t a_columns = 1600;
+constexpr size_t b_columns = 3200;
 
 class MMpara_v1;
 
