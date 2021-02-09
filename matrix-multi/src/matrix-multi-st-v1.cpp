@@ -174,8 +174,9 @@ int main() {
 #endif
 
   try {
-    queue q(d_selector, dpc_common::exception_handler);
-
+    queue q(d_selector, dpc_common::exception_handler, 
+            property::queue::enable_profiling{});
+            
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
               << q.get_device().get_info<info::device::name>() << "\n";

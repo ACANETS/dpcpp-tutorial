@@ -157,7 +157,7 @@ int main() {
   std::cout << "Matrix B size: " << a_columns << "," << b_columns << std::endl;
   std::cout << "Matrices C, D size: " << a_rows << "," 
               << b_columns << std::endl;
-              
+
 #ifndef FPGA_PROFILE
   // Start the timer (using std::chrono)
   dpc_common::TimeInterval exec_time;    
@@ -176,7 +176,8 @@ int main() {
 #endif
 
   try {
-    queue q(d_selector, dpc_common::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler, 
+            property::queue::enable_profiling{});
 
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
