@@ -50,7 +50,7 @@ void MatrixMulti_st_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 
   // Submit a command group to the queue by a lambda function that contains the
   // data access permission and device computation (kernel).
-  q.submit([&](handler &h) {
+  event e = q.submit([&](handler &h) {
     // Create an accessor for each buffer with access permission: read, write or
     // read/write. The accessor is a mean to access the memory in the buffer.
     auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
@@ -172,7 +172,8 @@ int main() {
 #endif
 
   try {
-    queue q(d_selector, dpc_common::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler, 
+		    property::queue::enable_profiling{});
 
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
