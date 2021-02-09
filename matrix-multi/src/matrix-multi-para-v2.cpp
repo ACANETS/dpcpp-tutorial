@@ -19,36 +19,20 @@
 
 using namespace sycl;
 
-using Duration = std::chrono::duration<double>;
-class Timer {
- public:
-  Timer() : start(std::chrono::steady_clock::now()) {}
-
-  Duration elapsed() {
-    auto now = std::chrono::steady_clock::now();
-    return std::chrono::duration_cast<Duration>(now - start);
-  }
-
- private:
-  std::chrono::steady_clock::time_point start;
-};
-
 // matrice shapes for this example.
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
 constexpr size_t a_rows = 1000;
 constexpr size_t a_columns = 2000;
-constexpr size_t b_columns = 4000;
+constexpr size_t b_columns = 3000;
 
 class MMpara_v2;
 
 void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
 
-  std::cout << "MatrixMultiplication using parallel_for()." << std::endl;
-
-  Timer t;
+  std::cout << "MatrixMultiplication using parallel_for() v2." << std::endl;
 
   // Create the range object for the arrays managed by the buffer.
   range<2> num_items{a_rows, b_columns};
@@ -63,7 +47,7 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
 
   // Submit a command group to the queue by a lambda function that contains the
   // data access permission and device computation (kernel).
-  q.submit([&](handler &h) {
+  event e = q.submit([&](handler &h) {
     // Create an accessor for each buffer with access permission: read, write or
     // read/write. The accessor is a mean to access the memory in the buffer.
     auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
@@ -97,7 +81,16 @@ void MatrixMulti_para(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[
       });
   });
 
-  std::cout << t.elapsed().count() << " seconds\n";
+#if FPGA || FPGA_PROFILE
+  // Query event e for kernel profiling information
+  // (blocks until command groups associated with e complete)
+  double kernel_time_ns =
+    e.get_profiling_info<info::event_profiling::command_end>() -
+    e.get_profiling_info<info::event_profiling::command_start>();
+
+  // Report profiling info
+  std::cout << "Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+#endif
 }
 
 //************************************
@@ -160,8 +153,15 @@ int main() {
       sum_parallel[i][j] = 0.0;
     }
 
+  std::cout << "Matrix A size: " << a_rows << "," << a_columns << std::endl;
+  std::cout << "Matrix B size: " << a_columns << "," << b_columns << std::endl;
+  std::cout << "Matrices C, D size: " << a_rows << "," 
+              << b_columns << std::endl;
+
 #ifndef FPGA_PROFILE
-  Timer th;
+  // Start the timer (using std::chrono)
+  dpc_common::TimeInterval exec_time;    
+
   // Compute the sum of two arrays in sequential for validation.
   std::cout << "computing on host..." << std::endl;
   for (size_t i = 0; i < a_rows; i++)
@@ -170,7 +170,9 @@ int main() {
       for (size_t k = 0; k < a_columns; k++)
         sum_sequential[i][j] += A[i][k] * B[k][j];
     }
-  std::cout << th.elapsed().count() << " seconds\n";
+
+  double host_time_s = exec_time.Elapsed();
+  std::cout << "host compute time " << host_time_s * 1000 << " ms\n";
 #endif
 
   try {
@@ -179,10 +181,6 @@ int main() {
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
               << q.get_device().get_info<info::device::name>() << "\n";
-    std::cout << "Matrix A size: " << a_rows << "," << a_columns << std::endl;
-    std::cout << "Matrix B size: " << a_columns << "," << b_columns << std::endl;
-    std::cout << "Matrices C, D size: " << a_rows << "," 
-              << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
     MatrixMulti_para(q, A, B, C, sum_parallel);
