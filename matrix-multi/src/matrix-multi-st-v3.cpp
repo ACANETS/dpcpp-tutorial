@@ -48,7 +48,7 @@ constexpr int kTimes = 3;
 
 //**
 // Number of iterations through the main loop
-constexpr int kNumRuns = 2;
+constexpr int kNumRuns = 1;
 
 // Matrice shapes for this example
 // A: a_rows x a_columns
@@ -257,9 +257,9 @@ int main() {
 		 * and with double buffering
 		 */
 		for (int i = 0; i < kNumRuns; i++) {
-			for (int i = 0; i < 2; i++) {
+			for (int j = 0; j < 2; j++) {
 				// Initialize timers to zero
-				total_kernel_time_per_slot[1] = 0;
+				total_kernel_time_per_slot[j] = 0;
 			}
 
 			switch (i) {
@@ -282,10 +282,10 @@ int main() {
 
 			// Single buffering
 			if (i == 0) {
-				for (int i = 0; i < kTimes; i++) {
+				for (int j = 0; j < kTimes; j++) {
 					// Only print every few iterations, just to limit the prints
-					if (i % 10 == 0) {
-						std::cout << "Launching kernel #" << i << "\n";
+					if (j % 10 == 0) {
+						std::cout << "Launching kernel #" << j << "\n";
 					}
 			
 					ProcessInput(input_buf_a[0], input_buf_b[0], input_buf_c[0]);
@@ -338,18 +338,22 @@ int main() {
 				<< (unsigned)(total_kernel_time / 1000000) << " ms\n\n";
 			// std::cout Throughput
 
-			/*
+			//
 			#ifndef FPGA_PROFILE
 			// Verify that the two arrays are equal
+			// FIXME. this needs to be moved to ProcessOutput() to choose the correct output buffer
+			//        depending on whether we use single buffer or double buffer
+			auto host_acc_d = output_buf[0].get_access<cl::sycl::access::mode::read>();
 			for (size_t i = 0; i < a_rows; i++)
 				for (size_t j = 0; j < b_columns; j++)
-					if ((sum_sequential[i][j] - sum_stv3[i][j]) > 0.0001) {
-						std::cout << "NOT EQUAL" << std::endl;
+					if ((sum_sequential[i][j] - host_acc_d[i][j]) > 0.0001) {
+						std::cout << "NOT EQUAL : " << "i=" << i << " j=" << j << ": "
+						 	<< sum_sequential[i][j] << " " << host_acc_d[i][j] << std::endl;
 						return -1;
 					}
 				std::cout << "Matrix Multiplication successfully completed on device\n";
 			#endif
-			*/
+			//
 		}
 	} catch (exception const &e) {
 		std::cout << "An exception is caught for matrix multiplication.\n";
