@@ -8,7 +8,7 @@
 //***************************************************************************************
 #include <CL/sycl.hpp>
 #include <array>
-#include <math>
+#include <cmath>
 #include <iostream>
 #include "dpc_common.hpp"
 #if FPGA || FPGA_EMULATOR || FPGA_PROFILE
@@ -40,7 +40,8 @@ static float horizontalSobelFilter[9] = {
 //
 // Image Info
 //
-static const char* inputImagePath = "./Images/cat.bmp";
+static const char* inputImagePath = "../image-conv/Images/cat.bmp";
+static const char* output_filename = "../image-conv/Images/filtered_cat.bmp";
 
 #define IMAGE_SIZE (720*1080)
 constexpr size_t array_size = IMAGE_SIZE;
@@ -94,7 +95,7 @@ void ImageConv(queue &q, float *image_in, float *image_out,
     //    1st parameter is the number of work items.
     //    2nd parameter is the kernel, the lambda to specify what to do per work item.
     //      The parameter of the lambda is the work item id.
-    h.parallel_for(num_items, [=](id<2> item))
+    h.parallel_for(num_items, [=](id<2> item)
     {
       //
       // Get the cow and col of the pixel assigned to this work item
@@ -143,7 +144,7 @@ void ImageConv(queue &q, float *image_in, float *image_out,
       //
       destPtr[row * ImageCols + col] = sum;
 
-    }
+    });
   });
 
 }
@@ -164,6 +165,8 @@ int main()
 
   float *hInputImage;
   float *hOutputImage;
+  float *vOutputImage;
+  float *outputImage;
 
   int imageRows;
   int imageCols;
@@ -173,7 +176,7 @@ int main()
   #ifndef FPGA_PROFILE
     // Query some platform information
     unsigned number = 0;
-    auto myPlatforms = platform.get_platforms();
+    auto myPlatforms = platform::get_platforms();
 
     //loop through the platforms to poke
     for (auto &onePlatform: myPlatforms)
@@ -222,10 +225,10 @@ int main()
     // Run the horizontal line filter, then the vertical line filter
     //
     filter = horizontalSobelFilter;
-    ImageConv(q, hInputImage, hOutputImage, filter, imageRows, imageCols);
+    ImageConv(q, hInputImage, hOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
 
     filter = verticalSobelFilter;
-    ImageConv(q, hInputImage, vOutputImage, filter, imageRows, imageCols);
+    ImageConv(q, hInputImage, vOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
 
   }
   catch(const std::exception& e)
@@ -242,7 +245,9 @@ int main()
   {
     for (int c = 0; c < imageCols; c++)
     {
-      outputImage = std::sqrt(std::pow(hOutputImage[r][c], 2) + std::pow(vOutputImage[r][c], 2));
+      outputImage[r * imageCols + c] = std::sqrt(
+        std::pow(hOutputImage[r * imageCols + c], 2) +
+         std::pow(vOutputImage[r * imageCols + c], 2));
     }
   }
 
@@ -250,7 +255,7 @@ int main()
   // Save the output bmp
   //
   printf("Output image saved as %s.\n", output_filename);
-  writeBmpFloat(outputImage, output_filename, imageRows, ImageCols, inputImagePath);
+  writeBmpFloat(outputImage, output_filename, imageRows, imageCols, inputImagePath);
 
   // TODO MRC - Verify results?
 

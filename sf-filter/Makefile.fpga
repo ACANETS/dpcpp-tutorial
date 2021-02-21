@@ -1,0 +1,37 @@
+CXX := dpcpp
+CXXFLAGS = -O2 -g -std=c++17
+CXXINC = -I../image-conv/src/Utils
+
+SRC := src/sf-filter.cpp ../image-conv/src/Utils/bmp-utils.c ../image-conv/src/Utils/gold.c ../image-conv/src/Utils/utils.c
+
+.PHONY: fpga_emu run_emu clean
+
+fpga_emu: sf-filter.fpga_emu
+
+hw: sf-filter.fpga
+
+report: sf-filter_report.a
+
+sf-filter.fpga_emu: $(SRC)
+	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
+
+a.o: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+
+sf-filter.fpga:  $(SRC)
+	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -Xshardware -DFPGA=1
+
+run_emu: sf-filter.fpga_emu
+	./sf-filter.fpga_emu
+
+run_hw: sf-filter.fpga
+	./sf-filter.fpga
+
+dev.o: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+
+sf-filter_report.a: dev.o
+	$(CXX) $(CXXFLAGS) -fintelfpga -fsycl-link $^ -o $@ -Xshardware
+
+clean:
+	rm -rf *.o *.d *.out *.mon *.emu *.aocr *.aoco *.prj *.fpga_emu *.fpga_emu_buffers sf-filter.fpga *.a
