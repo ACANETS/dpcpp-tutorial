@@ -81,7 +81,7 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
   std::cout << "n_wgroups = " << n_wgroups << std::endl;
   std::cout << "wgroup_size = " << wgroup_size << std::endl;
 
-  q.submit([&] (handler& h) {
+  event e = q.submit([&] (handler& h) {
 
     // prepare data accessors
 
