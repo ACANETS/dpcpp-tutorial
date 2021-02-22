@@ -32,7 +32,7 @@
 #include <array>
 #include <iostream>
 #include "dpc_common.hpp"
-#if FPGA || FPGA_EMULATOR
+#if FPGA || FPGA_EMULATOR || FPGA_PROFILE
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 #endif
 
@@ -81,7 +81,7 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
   std::cout << "n_wgroups = " << n_wgroups << std::endl;
   std::cout << "wgroup_size = " << wgroup_size << std::endl;
 
-  q.submit([&] (handler& h) {
+  event e = q.submit([&] (handler& h) {
 
     // prepare data accessors
 
@@ -105,7 +105,8 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
     // the second range object specifies the number of work items in a work group
     h.parallel_for<class reduction_kernel>(
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
-      [=] (nd_item<1> item) 
+      sycl::ONEAPI::reduction(global_mem, 0, std::plus<int>()),
+      [=] (nd_item<1> item, auto &global_mems) 
       //[[INTEL::max_work_group_size(1, 1, MAX_WG_SIZE)]] 
       {
 
@@ -186,8 +187,8 @@ int main() {
   INTEL::fpga_selector d_selector;
 #else
   // The default device selector will select the most performant device.
-  default_selector d_selector;
-  //cpu_selector d_selector;
+  //default_selector d_selector;
+  cpu_selector d_selector;
 #endif
 
   int result[4] = {0, 0, 0, 0};
@@ -231,8 +232,8 @@ int main() {
 #endif
 
   try {
-    queue q(d_selector, dpc_common::exception_handler,
-            property::queue::enable_profiling{});
+    queue q(d_selector, dpc_common::exception_handler, 
+          property::queue::enable_profiling{});
 
     device dev = q.get_device();
 
@@ -298,6 +299,7 @@ int main() {
   // reduce the final results in global memory
   for(int i=0; i < NUM_KEYWORDS; i++)
     std::cout << "keyword " << i << " appears " << result[i] << " times" << std::endl;
+
 
   return 0;
 }
