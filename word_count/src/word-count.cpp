@@ -63,7 +63,6 @@ using global_atomic_ref = ONEAPI::atomic_ref<
 //************************************
 // Word Count in DPC++ on device: 
 //************************************
-[[cl::reqd_work_group_size(1,1,4)]]
 void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern, 
   char* text, int chars_per_item, int* global_result) 
 {
@@ -107,7 +106,7 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
     h.parallel_for<class reduction_kernel>(
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
       [=] (nd_item<1> item) 
-      [[INTEL::max_work_group_size(1, 1, MAX_WG_SIZE)]] 
+      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), cl::reqd_work_group_size(1,1,4)]] 
       {
 
         // initialize local data
