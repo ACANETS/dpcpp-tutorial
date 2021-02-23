@@ -69,6 +69,9 @@ size_t text_size;
 void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups, 
   int wgroup_size, std::vector<char4> pattern, char* text, int chars_per_item, uint32_t* global_result) 
 {
+#if FPGA || FPGA_PROFILE
+  double total_kernel_time_ns = 0;
+#endif
 
   char4 keywords[NUM_KEYWORDS];
   for(int k = 0; k < NUM_KEYWORDS ; k++){
@@ -87,6 +90,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     (n_wgroups*wgroup_size);
 
   auto step = 0;
+
   while(step < n_steps ) {
     
     event e = q.submit([&] (handler& h) {
@@ -173,19 +177,25 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
 
       }); // parallel_for
     }); // q.submit
+#if FPGA || FPGA_PROFILE
+    // Query event e for kernel profiling information
+    // (blocks until command groups associated with e complete)
+    double kernel_time_ns =
+      e.get_profiling_info<info::event_profiling::command_end>() -
+      e.get_profiling_info<info::event_profiling::command_start>();
+
+    // Report profiling info
+    std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+
+    total_kernel_time_ns += kernel_time_ns;
+#endif
     step++;
   } // while
+
 #if FPGA || FPGA_PROFILE
-  // Query event e for kernel profiling information
-  // (blocks until command groups associated with e complete)
-  double kernel_time_ns =
-    e.get_profiling_info<info::event_profiling::command_end>() -
-    e.get_profiling_info<info::event_profiling::command_start>();
-
-  // Report profiling info
-  std::cout << "Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+    // Report profiling info
+    std::cout << " Total Kernel compute time:  " << total_kernel_time_ns * 1e-6 << " ms\n";
 #endif
-
 }
 
 
