@@ -44,6 +44,7 @@ using namespace sycl;
 #define NUM_KEYWORDS 4
 
 constexpr unsigned MAX_WG_SIZE = 16;
+constexpr unsigned CHAR_PER_WORKITEM = 32;
 
 // templates for atomic ref operations
 template <typename T>
@@ -60,45 +61,49 @@ using global_atomic_ref = ONEAPI::atomic_ref<
   ONEAPI::memory_scope::system,
   access::address_space::global_space>;
 
+size_t text_size;
+
 //************************************
 // Word Count in DPC++ on device: 
 //************************************
-void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern, 
-  char* text, int chars_per_item, int* global_result) 
+void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups, 
+  int wgroup_size, std::vector<char4> pattern, char* text, int chars_per_item, uint32_t* global_result) 
 {
 
   char4 keywords[NUM_KEYWORDS];
   for(int k = 0; k < NUM_KEYWORDS ; k++){
-    keywords[k] = {pattern[k*4], pattern[k*4+1], pattern[k*4+2], pattern[k*4+3]};
-    //keywords[k] = pattern[k*4].xyzw();
+    //keywords[k] = {pattern[k*4], pattern[k*4+1], pattern[k*4+2], pattern[k*4+3]};
+    keywords[k] = pattern[k];
   }
 
   // buffers for device
   buffer<char,1> text_buf(text, range<1>(MAX_TEXT_LEN));
-  buffer<int, 1> global_result_buf(global_result, range<1>(NUM_KEYWORDS));
+  buffer<uint32_t, 1> global_result_buf(global_result, range<1>(NUM_KEYWORDS));
 
-  std::cout << "here = " << pattern[0] << std::endl;
-  std::cout << "n_wgroups = " << n_wgroups << std::endl;
+  std::cout << std::endl << "n_wgroups = " << n_wgroups << std::endl;
   std::cout << "wgroup_size = " << wgroup_size << std::endl;
 
-  event e = q.submit([&] (handler& h) {
+  auto n_steps = (int)(total_num_workitems + n_wgroups*wgroup_size -1) / 
+    (n_wgroups*wgroup_size);
 
-    // prepare data accessors
-
+  auto step = 0;
+  while(step < n_steps ) {
+    
+    event e = q.submit([&] (handler& h) {
     // allocate local memory
     // to allow each workgroup has a local memory space of int32_t*NUM_KEYWORDS
     // and we have total of n_wgroups work groups. 
     accessor <int, 1,
       access::mode::read_write,
       access::target::local>
-    local_mem(range<1>(n_wgroups*NUM_KEYWORDS), h);
+    local_mem(range<1>(wgroup_size*sizeof(uint32_t)*NUM_KEYWORDS), h);
 
     // point to global memory where the final results are stored
     auto global_mem = global_result_buf.get_access<access::mode::read_write>(h);
 
     // point to global memory where the text are stored
     auto text_mem = text_buf.get_access<access::mode::read>(h);
-
+    auto text_max_len = text_size;
     // use nd_range to specify kernels' global size and local size.
     // in this case, we use one-dimensional nd_range
     // the first range object specifies the number of (total) work items per dimension
@@ -106,7 +111,7 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
     h.parallel_for<class reduction_kernel>(
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
       [=] (nd_item<1> item) 
-      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), cl::reqd_work_group_size(1,1,4)]] 
+      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), cl::reqd_work_group_size(1,1,MAX_WG_SIZE)]] 
       {
 
         // initialize local data
@@ -115,7 +120,7 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
         size_t local_id = item.get_local_id(0);
         // get_global_linear_id() can map to a linear ID even in multi-dimensional case
         // here, it has the same effect as get_global_id(0)
-        size_t global_id = item.get_global_linear_id();
+        //size_t global_id = item.get_global_linear_id();
 
         if (local_id == 0) {
           local_mem[group_id*NUM_KEYWORDS] = 0;
@@ -125,14 +130,21 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
         }
         item.barrier(sycl::access::fence_space::local_space);         
 
-        int item_offset = global_id * chars_per_item;
+        // In each step, each work item will process char_per_item characters
+        // Prior to this step, there are many characters processed already 
+        int item_offset = step * n_wgroups * wgroup_size * chars_per_item 
+                          + group_id * wgroup_size * chars_per_item 
+                          + local_id * chars_per_item;
 
         /* Iterate through characters in text */
         for(int i=item_offset; i<item_offset + chars_per_item; i++) {
+          // check bounds of text buffer
+          if(i > text_max_len-4)
+            break;
+          //load one four-character word
+          char4 text_word;
+          text_word.load(0, text_mem.get_pointer()+i);
           for(int k = 0; k < NUM_KEYWORDS ; k++){
-            //load one four-character word
-            char4 text_word;
-            text_word.load(k, text_mem.get_pointer()+i);
             //vec<bool, 4> cmp_result;
             //cmp_result = text_word == keywords[k];
             if (text_word.x() == keywords[k].x() &&
@@ -152,16 +164,17 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
 
 #if 1
         if( local_id == 0) {
-          global_atomic_ref<int>(global_mem[0]) += local_mem[group_id*NUM_KEYWORDS];
-          global_atomic_ref<int>(global_mem[1]) += local_mem[group_id*NUM_KEYWORDS+1];
-          global_atomic_ref<int>(global_mem[2]) += local_mem[group_id*NUM_KEYWORDS+2];
-          global_atomic_ref<int>(global_mem[3]) += local_mem[group_id*NUM_KEYWORDS+3];
+          global_atomic_ref<uint32_t>(global_mem[0]) += local_mem[group_id*NUM_KEYWORDS];
+          global_atomic_ref<uint32_t>(global_mem[1]) += local_mem[group_id*NUM_KEYWORDS+1];
+          global_atomic_ref<uint32_t>(global_mem[2]) += local_mem[group_id*NUM_KEYWORDS+2];
+          global_atomic_ref<uint32_t>(global_mem[3]) += local_mem[group_id*NUM_KEYWORDS+3];
         }
 #endif
 
-    }); // parallel_for
-  }); // q.submit
-
+      }); // parallel_for
+    }); // q.submit
+    step++;
+  } // while
 #if FPGA || FPGA_PROFILE
   // Query event e for kernel profiling information
   // (blocks until command groups associated with e complete)
@@ -176,7 +189,7 @@ void string_search(queue &q, int n_wgroups, int wgroup_size, char16 pattern,
 }
 
 
-int main() {
+int main(int argc, char **argv) {
   // Create device selector for the device of your interest.
 #if FPGA_EMULATOR
   // DPC++ extension: FPGA emulator selector on systems without FPGA card.
@@ -190,17 +203,25 @@ int main() {
   //cpu_selector d_selector;
 #endif
 
-  int result[4] = {0, 0, 0, 0};
+  uint32_t result[4] = {0, 0, 0, 0};
   // we search for four key words: "that", "with", "have", "from"
-  char16 pattern = {'t','h','a','t','w','i','t','h','h','a','v','e','f','r','o','m'};
+  //char16 pattern = {'t','h','a','t','w','i','t','h','h','a','v','e','f','r','o','m'};
+  std::vector<char4> pattern;
+  pattern.push_back({'t','h','a','t'});
+  pattern.push_back({'w','i','t','h'});
+  pattern.push_back({'h','a','v','e'});
+  pattern.push_back({'f','r','o','m'});
+
   FILE *text_handle;
   char *text;
-  size_t text_size;
   int chars_per_item;
   int n_local_results;
 
   /* Read text file and place content into buffer */
-  text_handle = fopen(TEXT_FILE, "r");
+  if (argc != 2)
+    text_handle = fopen(TEXT_FILE, "r");
+  else
+    text_handle = fopen(argv[1], "r");
   if(text_handle == NULL) {
       perror("Couldn't find the text file");
       exit(1);
@@ -211,6 +232,7 @@ int main() {
   text = (char*)calloc(text_size, sizeof(char));
   fread(text, sizeof(char), text_size, text_handle);
   fclose(text_handle);
+  std::cout << "file size = " << text_size << " bytes " << std::endl;
 
 #ifndef FPGA_PROFILE
   // Query about the platform
@@ -239,12 +261,12 @@ int main() {
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
               << dev.get_info<info::device::name>() << "\n";
-    auto num_groups =
+    auto num_cmpunit =
         dev.get_info<cl::sycl::info::device::max_compute_units>();
-    std::cout << "num of compute units = " << num_groups << std::endl;
+    std::cout << "num of compute units (reported)= " << num_cmpunit << std::endl;
 
-    num_groups = 2 < num_groups ? 2 : num_groups;
-    std::cout << "FORCE num of compute units = " << num_groups << std::endl;
+    num_cmpunit = 2 < num_cmpunit ? 2 : num_cmpunit;
+    std::cout << "num of compute units (set as)= " << num_cmpunit << std::endl;
 
     auto wgroup_size = dev.get_info<info::device::max_work_group_size>();
     std::cout << "max work group size = " << wgroup_size << std::endl;
@@ -269,7 +291,7 @@ int main() {
           != info::local_mem_type::none);
     auto local_mem_size = dev.get_info<info::device::local_mem_size>();
     if (!has_local_mem
-        || local_mem_size < (num_groups * sizeof(int32_t)*NUM_KEYWORDS))
+        || local_mem_size < (wgroup_size * sizeof(int32_t)*NUM_KEYWORDS))
     {
         throw "Device doesn't have enough local memory!";
     }
@@ -281,14 +303,15 @@ int main() {
     auto global_mem_size = dev.get_info<info::device::global_mem_size>();
     std::cout << "global_mem_size = " << global_mem_size << std::endl;
 
-    // global size = number of compute units * number of work items per work group
-    auto global_size = num_groups * wgroup_size;    
-    chars_per_item = text_size / global_size + 1;
-    std::cout << "chars_per_item = " << chars_per_item << std::endl;
+    auto total_num_workitems = (int)(text_size + CHAR_PER_WORKITEM - 1) / CHAR_PER_WORKITEM;
+    auto num_groups = num_cmpunit;
+    std::cout << "chars_per_item = " << CHAR_PER_WORKITEM << std::endl;
+    std::cout << "total_num_workitems = " << total_num_workitems << std::endl;
+    std::cout << "num_groups = " << num_groups << std::endl;
 
     // Word count in DPC++
-    string_search(q, num_groups, wgroup_size, pattern, text, 
-      chars_per_item, result);
+    string_search(q, total_num_workitems, num_groups, wgroup_size, pattern, text, 
+      CHAR_PER_WORKITEM, result);
   
   } catch (exception const &e) {
     std::cout << "An exception is caught for word count.\n";
@@ -297,7 +320,8 @@ int main() {
 
   // reduce the final results in global memory
   for(int i=0; i < NUM_KEYWORDS; i++)
-    std::cout << "keyword " << i << " appears " << result[i] << " times" << std::endl;
+    std::cout << "keyword " << pattern[i][0]<<pattern[i][1]<<pattern[i][2]<<pattern[i][3] 
+    << " appears " << result[i] << " times" << std::endl;
 
   return 0;
 }
