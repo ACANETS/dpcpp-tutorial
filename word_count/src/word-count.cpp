@@ -80,7 +80,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
   }
 
   // buffers for device
-  buffer<char,1> text_buf(text, range<1>(MAX_TEXT_LEN));
+  buffer<char,1> text_buf(text, range<1>(text_size));
   buffer<uint32_t, 1> global_result_buf(global_result, range<1>(NUM_KEYWORDS));
 
   std::cout << std::endl << "n_wgroups = " << n_wgroups << std::endl;
@@ -97,10 +97,10 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     // allocate local memory
     // to allow each workgroup has a local memory space of int32_t*NUM_KEYWORDS
     // and we have total of n_wgroups work groups. 
-    accessor <int, 1,
+    accessor <uint32_t, 1,
       access::mode::read_write,
       access::target::local>
-    local_mem(range<1>(wgroup_size*sizeof(uint32_t)*NUM_KEYWORDS), h);
+    local_mem(range<1>(n_wgroups*sizeof(uint32_t)*NUM_KEYWORDS), h);
 
     // point to global memory where the final results are stored
     auto global_mem = global_result_buf.get_access<access::mode::read_write>(h);
@@ -158,7 +158,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
               )
             {
               // we need to increment the count (in local mem) ATOMICALLY for keywords[k]
-              local_atomic_ref<int>(local_mem[group_id*NUM_KEYWORDS+k])++;
+              local_atomic_ref<uint32_t>(local_mem[group_id*NUM_KEYWORDS+k])++;
               // FIXME local_mem[group_id*NUM_KEYWORDS+k] ++;
             }
           }
@@ -166,14 +166,12 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
 
         item.barrier(sycl::access::fence_space::local_space); 
 
-#if 1
         if( local_id == 0) {
           global_atomic_ref<uint32_t>(global_mem[0]) += local_mem[group_id*NUM_KEYWORDS];
           global_atomic_ref<uint32_t>(global_mem[1]) += local_mem[group_id*NUM_KEYWORDS+1];
           global_atomic_ref<uint32_t>(global_mem[2]) += local_mem[group_id*NUM_KEYWORDS+2];
           global_atomic_ref<uint32_t>(global_mem[3]) += local_mem[group_id*NUM_KEYWORDS+3];
         }
-#endif
 
       }); // parallel_for
     }); // q.submit
