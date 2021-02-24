@@ -75,7 +75,6 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
 
   char4 keywords[NUM_KEYWORDS];
   for(int k = 0; k < NUM_KEYWORDS ; k++){
-    //keywords[k] = {pattern[k*4], pattern[k*4+1], pattern[k*4+2], pattern[k*4+3]};
     keywords[k] = pattern[k];
   }
 
@@ -96,7 +95,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     event e = q.submit([&] (handler& h) {
     // allocate local memory
     // to allow each workgroup has a local memory space of int32_t*NUM_KEYWORDS
-    // and we have total of n_wgroups work groups. 
+    // for maintaining a set of keyword counters for all the workitems in a workgroup
     accessor <uint32_t, 1,
       access::mode::read_write,
       access::target::local>
@@ -121,11 +120,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
         // initialize local data
         group<1> g = item.get_group();
         size_t group_id = g.get_id();
-        //size_t group_id = item.get_group_id();
         size_t local_id = item.get_local_id(0);
-        // get_global_linear_id() can map to a linear ID even in multi-dimensional case
-        // here, it has the same effect as get_global_id(0)
-        //size_t global_id = item.get_global_linear_id();
 
         if (local_id == 0) {
           local_mem[0] = 0;
@@ -150,8 +145,6 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
           char4 text_word;
           text_word.load(0, text_mem.get_pointer()+i);
           for(int k = 0; k < NUM_KEYWORDS ; k++){
-            //vec<bool, 4> cmp_result;
-            //cmp_result = text_word == keywords[k];
             if (text_word.x() == keywords[k].x() &&
                 text_word.y() == keywords[k].y() &&
                 text_word.z() == keywords[k].z() &&
@@ -160,7 +153,6 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
             {
               // we need to increment the count (in local mem) ATOMICALLY for keywords[k]
               local_atomic_ref<uint32_t>(local_mem[k])++;
-              // FIXME local_mem[group_id*NUM_KEYWORDS+k] ++;
             }
           }
         }
@@ -192,7 +184,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
   } // while
 
 #if FPGA || FPGA_PROFILE
-    // Report profiling info
+    // Report profiling info as it takes multiple steps
     std::cout << " Total Kernel compute time:  " << total_kernel_time_ns * 1e-6 << " ms\n";
 #endif
 }
@@ -214,7 +206,6 @@ int main(int argc, char **argv) {
 
   uint32_t result[4] = {0, 0, 0, 0};
   // we search for four key words: "that", "with", "have", "from"
-  //char16 pattern = {'t','h','a','t','w','i','t','h','h','a','v','e','f','r','o','m'};
   std::vector<char4> pattern;
   pattern.push_back({'t','h','a','t'});
   pattern.push_back({'w','i','t','h'});
@@ -327,7 +318,7 @@ int main(int argc, char **argv) {
     std::terminate();
   }
 
-  // reduce the final results in global memory
+  // display final results in global memory
   for(int i=0; i < NUM_KEYWORDS; i++)
     std::cout << "keyword " << pattern[i][0]<<pattern[i][1]<<pattern[i][2]<<pattern[i][3] 
     << " appears " << result[i] << " times" << std::endl;
