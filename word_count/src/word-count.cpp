@@ -100,7 +100,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     accessor <uint32_t, 1,
       access::mode::read_write,
       access::target::local>
-    local_mem(range<1>(n_wgroups*sizeof(uint32_t)*NUM_KEYWORDS), h);
+    local_mem(range<1>(NUM_KEYWORDS), h);
 
     // point to global memory where the final results are stored
     auto global_mem = global_result_buf.get_access<access::mode::read_write>(h);
@@ -121,16 +121,17 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
         // initialize local data
         group<1> g = item.get_group();
         size_t group_id = g.get_id();
+        //size_t group_id = item.get_group_id();
         size_t local_id = item.get_local_id(0);
         // get_global_linear_id() can map to a linear ID even in multi-dimensional case
         // here, it has the same effect as get_global_id(0)
         //size_t global_id = item.get_global_linear_id();
 
         if (local_id == 0) {
-          local_mem[group_id*NUM_KEYWORDS] = 0;
-          local_mem[group_id*NUM_KEYWORDS+1] = 0;
-          local_mem[group_id*NUM_KEYWORDS+2] = 0;
-          local_mem[group_id*NUM_KEYWORDS+3] = 0;
+          local_mem[0] = 0;
+          local_mem[1] = 0;
+          local_mem[2] = 0;
+          local_mem[3] = 0;
         }
         item.barrier(sycl::access::fence_space::local_space);         
 
@@ -158,7 +159,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
               )
             {
               // we need to increment the count (in local mem) ATOMICALLY for keywords[k]
-              local_atomic_ref<uint32_t>(local_mem[group_id*NUM_KEYWORDS+k])++;
+              local_atomic_ref<uint32_t>(local_mem[k])++;
               // FIXME local_mem[group_id*NUM_KEYWORDS+k] ++;
             }
           }
@@ -167,10 +168,10 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
         item.barrier(sycl::access::fence_space::local_space); 
 
         if( local_id == 0) {
-          global_atomic_ref<uint32_t>(global_mem[0]) += local_mem[group_id*NUM_KEYWORDS];
-          global_atomic_ref<uint32_t>(global_mem[1]) += local_mem[group_id*NUM_KEYWORDS+1];
-          global_atomic_ref<uint32_t>(global_mem[2]) += local_mem[group_id*NUM_KEYWORDS+2];
-          global_atomic_ref<uint32_t>(global_mem[3]) += local_mem[group_id*NUM_KEYWORDS+3];
+          global_atomic_ref<uint32_t>(global_mem[0]) += local_mem[0];
+          global_atomic_ref<uint32_t>(global_mem[1]) += local_mem[1];
+          global_atomic_ref<uint32_t>(global_mem[2]) += local_mem[2];
+          global_atomic_ref<uint32_t>(global_mem[3]) += local_mem[3];
         }
 
       }); // parallel_for
