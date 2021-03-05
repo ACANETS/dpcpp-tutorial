@@ -20,6 +20,11 @@ using namespace sycl;
 // useful headers for image processing
 #include "utils.h"
 #include "bmp-utils.h"
+#include "gold.h"
+
+// pipe_array headers
+#include "pipe_array.hpp"
+#include "unroller.hpp"
 
 // Debug flag for print statements
 static const bool debug = true;
@@ -40,12 +45,136 @@ static float horizontalSobelFilter[9] = {
 //
 // Image Info
 //
-static const char* inputImagePath = "../image-conv/Images/cat.bmp";
-static const char* output_filename = "../image-conv/Images/filtered_cat.bmp";
+static const char* inputImagePath = "./Images/cat.bmp";
+static const char* output_filename = "./Images/filtered_cat.bmp";
 
 #define IMAGE_SIZE (720*1080)
 constexpr size_t array_size = IMAGE_SIZE;
+constexpr size_t pipe_size = array_size * 2;
 typedef std::array<float, array_size> FloatArray;
+
+// 2-D pipe matrix. One pipe for each pixel, for each image filter.
+constexpr size_t kDepth = 2;
+constexpr size_t kNumProducers = 2;
+constexpr size_t kNumRows = 720;
+constexpr size_t kNumCols = 1080;
+
+using ProducerPipeArray = PipeArray<class ProducerPipe, // Identifier for the pipe
+                                    float,              // Type of data in the pipe
+                                    array_size,         // max capacity of the pipe
+                                    2                   // number of pipes to create
+                                    >;
+
+
+template <size_t producer_id> class ProducerKernel;
+class ConsumerKernel;
+
+template<size_t producer_id>
+void Producer(queue &q, float *image_in,
+              float *filter_in, const size_t FilterWidth,
+              const size_t ImageRows, const size_t ImageCols)
+{
+  std::cout << "Enqueuing producer " << producer_id << "..." << std::endl;
+
+  buffer<float, 1> image_in_buf(image_in, range<1>(ImageRows * ImageCols));
+  //buffer<float, 1> image_out_buf(image_out, range<1>(ImageRows * ImageCols));
+  buffer<float, 1> filter_buf(filter_in, range<1>(FilterWidth*FilterWidth));
+
+  //
+  // Compute the filter width (intentionally truncate)
+  //
+  int halfFilterWidth = (int)FilterWidth/2;
+
+  auto e = q.submit([&](handler &h)
+  {
+    auto sourcePtr = image_in_buf.get_access<access::mode::read>(h);
+    auto filterPtr = filter_buf.get_access<access::mode::read>(h);
+
+    //
+    // Apply filter to each pixel in the image.
+    // Need to do this as single task to ensure the order
+    // of pixels being processed by the consumer kernel;
+    //
+    h.single_task<ProducerKernel<producer_id>>([=]()
+    {
+      for (int row = 0; row < ImageRows; row++)
+      {
+        for (int col = 0; col < ImageCols; col++)
+        {
+
+          // Each work item iterates around its local are based on the size of the filter.
+          float sum = 0.0f;
+
+          //
+          // Apply the filter to the pixel neigborhood
+          //
+          for (int k = -halfFilterWidth; k <= halfFilterWidth; k++)
+          {
+            for (int l = -halfFilterWidth; l <= halfFilterWidth; l++)
+            {
+              // Indices used to access the image
+              int r = row + k;
+              int c = col + l;
+
+              // Handle out of bounds  locations by clamping to the border pixel
+              r = (r < 0) ? 0 : r;
+              c = (c < 0) ? 0 : c;
+              r = (r >= ImageRows) ? ImageRows - 1 : r;
+              c = (c >= ImageCols) ? ImageCols - 1 : c;
+
+              sum += sourcePtr[r * ImageCols + c] *
+                filterPtr[(k + halfFilterWidth) * FilterWidth + (l + halfFilterWidth)];
+
+            }
+          }
+          //
+          // Write the value to the pipe for the given filter, row, col values
+          //
+          ProducerPipeArray::PipeAt<producer_id>::write(sum);
+
+        }
+      }
+    });
+  });
+}
+
+void Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t ImageCols)
+{
+  std::cout << "Enqueuing consumer..." << std::endl;
+
+  //
+  // Create buffers for the input and output data
+  //
+  buffer<float, 1> image_out_buf(image_out, range<1>(ImageRows * ImageCols));
+
+  auto e = q.submit([&](handler &h)
+  {
+    auto destPtr = image_out_buf.get_access<access::mode::write>(h);
+
+    //
+    // Loop through each pixel and combine the results from the two producer kernels.
+    // Must be done as a single task to ensure the image is processed in the correct order.
+    //
+    h.single_task<ConsumerKernel>([=]()
+    {
+      for (int row= 0; row < ImageRows; row++)
+      {
+        for (int col = 0; col < ImageCols; col++)
+        {
+          //
+          // Read the results from the two data pipes and calculate the RMS
+          //
+          float result_0 = ProducerPipeArray::PipeAt<0>::read();
+          float result_1 = ProducerPipeArray::PipeAt<1>::read();
+
+          float result = sqrt((result_0 * result_0) + (result_1 * result_1));
+
+          destPtr[row * ImageCols + col] = result;
+        }
+      }
+    });
+  });
+}
 
 // **************************************************************************************
 // Image Convolution in DPC++ on device:
@@ -102,16 +231,6 @@ void ImageConv(queue &q, float *image_in, float *image_out,
       //
       int row = item[0];
       int col = item[1];
-
-      //
-      // Half the width of the filter is needed for indexing memory later
-      //
-      int halfWidth = (int)(FilterWidth / 2);
-
-      //
-      // Iterator for the filter
-      //
-      int filterIdx = 0;
 
       // Each work item iterates around its local are based on the size of the filter.
       float sum = 0.0f;
@@ -222,13 +341,26 @@ int main()
       q.get_device().get_info<info::device::name>() << std::endl;
 
     //
+    // Enqueue producers
+    //
+    Producer<0>(q, hInputImage, horizontalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    Producer<1>(q, hInputImage, verticalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+
+    //
+    // Enqueue Consumer
+    //
+    Consumer(q, outputImage, imageRows, imageCols);
+
+
+    //
     // Run the horizontal line filter, then the vertical line filter
     //
-    filter = horizontalSobelFilter;
+    /*filter = horizontalSobelFilter;
     ImageConv(q, hInputImage, hOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
 
     filter = verticalSobelFilter;
     ImageConv(q, hInputImage, vOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
+    */
 
   }
   catch(const std::exception& e)
@@ -241,7 +373,7 @@ int main()
   //
   // No errors runing kernel, so combine the two filtered images
   //
-  for (int r = 0; r < imageRows; r++)
+  /*for (int r = 0; r < imageRows; r++)
   {
     for (int c = 0; c < imageCols; c++)
     {
@@ -249,7 +381,7 @@ int main()
         std::pow(hOutputImage[r * imageCols + c], 2) +
          std::pow(vOutputImage[r * imageCols + c], 2));
     }
-  }
+  }*/
 
   //
   // Save the output bmp
