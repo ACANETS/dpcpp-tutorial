@@ -18,20 +18,26 @@
 ###########################################################################################################
 
 # Initial Setup
+hostname
 source /data/intel_fpga/devcloudLoginToolSetup.sh
 tools_setup -t A10OAPI
 
 # Running project in Emulation mode
 printf "\\n%s\\n" "Running in Emulation Mode:"
-cd ~/projects/dpcpp_tutorial/matrix-multi
-rm -rf newbuild
-mkdir newbuild
+cd ~/projects/dpcpp-tutorial/matrix-multi
+mkdir -p newbuild
+cd newbuild
 cmake ..
 make 
 ./matrix-multi-para-v1.fpga_emu
 error_check
 
 # Running project in FPGA Hardware Mode (this takes approximately 1 hour)
-#printf "\\n%s\\n" "Running in FPGA Hardware Mode:"
-#make run_hw -f Makefile.fpga
-#error_check
+printf "\\n%s\\n" "Building for FPGA profiling:"
+cd ~/projects/dpcpp-tutorial/matrix-multi
+mkdir -p newbuild
+cd newbuild
+cmake ..
+make profile
+error_check
+
