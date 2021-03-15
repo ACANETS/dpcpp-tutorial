@@ -40,6 +40,9 @@ class MMstv3_cplusd;
 
 void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
+#if FPGA || FPGA_PROFILE
+  double kernel_time_ns, total_kernel_time_ns = 0;
+#endif
 
   std::cout << "MatrixMultiplication using single_task() v3." << std::endl;
 
@@ -115,16 +118,16 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           });
       }); // event e
 #if FPGA || FPGA_PROFILE
-    // Query event e for kernel profiling information
-    // (blocks until command groups associated with e complete)
-    double kernel_time_ns =
-      e.get_profiling_info<info::event_profiling::command_end>() -
-      e.get_profiling_info<info::event_profiling::command_start>();
+      // Query event e for kernel profiling information
+      // (blocks until command groups associated with e complete)
+      kernel_time_ns =
+        e.get_profiling_info<info::event_profiling::command_end>() -
+        e.get_profiling_info<info::event_profiling::command_start>();
 
-    // Report profiling info
-    std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+      // Report profiling info
+      std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
 
-    total_kernel_time_ns += kernel_time_ns;
+      total_kernel_time_ns += kernel_time_ns;
 #endif
     } // for j
   } // for i
@@ -144,6 +147,21 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           d[m][n] += c[m][n];
     });
   }); // event e
+#if FPGA || FPGA_PROFILE
+  // Query event e for kernel profiling information
+  // (blocks until command groups associated with e complete)
+  kernel_time_ns =
+    e.get_profiling_info<info::event_profiling::command_end>() -
+    e.get_profiling_info<info::event_profiling::command_start>();
+
+  // Report profiling info
+  std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+
+  total_kernel_time_ns += kernel_time_ns;
+
+  // Report profiling info as it takes multiple steps
+  std::cout << " Total Kernel compute time:  " << total_kernel_time_ns * 1e-6 << " ms\n";
+#endif
 }
 
 
