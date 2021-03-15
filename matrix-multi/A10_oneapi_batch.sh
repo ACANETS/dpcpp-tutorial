@@ -24,7 +24,8 @@ tools_setup -t A10OAPI
 # Running project in Emulation mode
 printf "\\n%s\\n" "Running in Emulation Mode:"
 cd ~/projects/dpcpp_tutorial/matrix-multi
-mkdir build
+rm -rf newbuild
+mkdir newbuild
 cmake ..
 make 
 ./matrix-multi-para-v1.fpga_emu
