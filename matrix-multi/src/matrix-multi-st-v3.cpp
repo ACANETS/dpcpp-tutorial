@@ -24,11 +24,11 @@ using namespace sycl;
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
-constexpr size_t a_rows = 8;
-constexpr size_t a_columns = 16;
-constexpr size_t b_columns = 32;
+constexpr size_t a_rows = 800;
+constexpr size_t a_columns = 1600;
+constexpr size_t b_columns = 3200;
 
-#define BLOCK_SIZE 4
+#define BLOCK_SIZE 80
 
 using ProducerToConsumerPipe = INTEL::pipe<  // Defined in the SYCL headers.
     class ProducerConsumerPipe,              // An identifier for the pipe.
@@ -102,6 +102,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
             // element-wise multiplication and accumulation
             for (m=0; m < BLOCK_SIZE; m++)
               for ( n=0; n < BLOCK_SIZE; n++) {
+                s = 0;
                 for (k=0; k < BLOCK_SIZE; k++)
                   s += local_mem_a[m][k] * local_mem_b[k][n]; 
                 // add to Matrix D
