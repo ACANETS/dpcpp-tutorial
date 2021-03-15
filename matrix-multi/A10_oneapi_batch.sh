@@ -18,6 +18,7 @@
 ###########################################################################################################
 
 # Initial Setup
+hostname
 source /data/intel_fpga/devcloudLoginToolSetup.sh
 tools_setup -t A10OAPI
 
