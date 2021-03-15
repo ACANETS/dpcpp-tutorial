@@ -67,12 +67,13 @@ void MatrixMulti_st_v2(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     //   single_task<typename kernel_lambda_name>([=](){});
     h.single_task<MMstv2>([=]() [[intel::kernel_args_restrict]]
       { 
-        float s = 0;
         #pragma unroll 4
         for (size_t i = 0; i < a_rows * b_columns; i++) {
-          size_t row, col;
+          size_t row, col, s;
           row = i / widthC;
           col = i % widthC;          
+          
+          s = 0;
           #pragma unroll 2
           for (size_t k = 0; k < a_columns; k++)
             s += a[row][k] * b[k][col]; 
