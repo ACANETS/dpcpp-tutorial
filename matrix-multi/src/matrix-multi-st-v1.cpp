@@ -65,9 +65,9 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     h.single_task<MMstv1>([=]() [[intel::kernel_args_restrict]]
       { 
         size_t row, col;
-        float s = 0;
         for (row = 0; row < a_rows; row++)
           for (col = 0; col < b_columns; col++) {
+            float s = 0;
             #pragma unroll 2
             for (size_t k = 0; k < a_columns; k++)
               s += a[row][k] * b[k][col]; 
@@ -188,9 +188,10 @@ int main() {
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
-        if( (sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
+        if( abs(sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
           std::cout << "not equal" << std::endl;
-          return -1;
+          std::cout << i << " " << j << " " << sum_sequential[i][j] 
+          << " " << sum_stv1[i][j] << std::endl;          return -1;
         }
     std::cout << "Matrix multiplication successfully completed on device.\n";
 #endif
