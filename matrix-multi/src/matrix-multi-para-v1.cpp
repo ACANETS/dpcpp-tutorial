@@ -191,7 +191,7 @@ int main() {
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
-        if( (sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
+        if( abs(sum_sequential[i][j] - sum_parallel[i][j]) > 0.0001) {
           std::cout << "not equal" << std::endl;
           return -1;
         }
