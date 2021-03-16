@@ -28,7 +28,7 @@ constexpr size_t a_rows = 800;
 constexpr size_t a_columns = 1600;
 constexpr size_t b_columns = 3200;
 
-#define BLOCK_SIZE 80
+#define BLOCK_SIZE 32
 
 using ProducerToConsumerPipe = INTEL::pipe<  // Defined in the SYCL headers.
     class ProducerConsumerPipe,              // An identifier for the pipe.
@@ -74,7 +74,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         // read/write. The accessor is a mean to access the memory in the buffer.
         auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
         auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
-        auto d = sum_buf.get_access<access::mode::write, access::target::global_buffer>(h);
+        auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
       
         // allocate local memory to hold a block of data from A, B
         accessor <float, 2,
