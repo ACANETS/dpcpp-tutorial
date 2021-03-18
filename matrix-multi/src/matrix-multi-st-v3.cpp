@@ -29,6 +29,12 @@ constexpr size_t a_columns = 1600;
 constexpr size_t b_columns = 3200;
 
 #define BLOCK_SIZE 32
+// define FPGA onchip memory banks and widths
+#define NUM_BANKS 32
+#define BANK_WIDTH 128
+#if (BLOCK_SIZE*BLOCK_SIZE) != (NUM_BANKS*BANK_WIDTH/4)
+#error 'FPGA onchip memory needs correct number of banks and depth'
+#endif
 
 using ProducerToConsumerPipe = INTEL::pipe<  // Defined in the SYCL headers.
     class ProducerConsumerPipe,              // An identifier for the pipe.
@@ -77,15 +83,17 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
       
         // allocate local memory to hold a block of data from A, B
+	/*
         accessor <float, 2,
           access::mode::read_write,
           access::target::local>
-        local_mem_a(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
+	local_mem_a(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
 
         accessor <float, 2,
           access::mode::read_write,
           access::target::local>
         local_mem_b(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
+	*/
 
         // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
         // using the cl::sycl::single_task API:
@@ -94,8 +102,11 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           { 
             size_t row, col, m, n, k;
             float s = 0;
+	    [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
+	    [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
 
             // load blocks of data to local memory from global memory
+	    //#pragma unroll 8
             for (m=0; m < BLOCK_SIZE; m++)
               for ( n=0; n < BLOCK_SIZE; n++)
               {
@@ -106,6 +117,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
             for (m=0; m < BLOCK_SIZE; m++)
               for ( n=0; n < BLOCK_SIZE; n++) {
                 s = 0;
+	        #pragma unroll
                 for (k=0; k < BLOCK_SIZE; k++)
                   s += local_mem_a[m][k] * local_mem_b[k][n]; 
                 // add to Matrix D
@@ -125,7 +137,8 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         e.get_profiling_info<info::event_profiling::command_start>();
 
       // Report profiling info
-      std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+      // step++;
+      //std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
 
       total_kernel_time_ns += kernel_time_ns;
 #endif
@@ -155,7 +168,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     e.get_profiling_info<info::event_profiling::command_start>();
 
   // Report profiling info
-  std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+  //std::cout << " Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
 
   total_kernel_time_ns += kernel_time_ns;
 
