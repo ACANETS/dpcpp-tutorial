@@ -80,18 +80,6 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
         auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
       
-        // allocate local memory to hold a block of data from A, B
-	/*
-        accessor <float, 2,
-          access::mode::read_write,
-          access::target::local>
-	local_mem_a(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
-
-        accessor <float, 2,
-          access::mode::read_write,
-          access::target::local>
-        local_mem_b(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
-	*/
 
         // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
         // using the cl::sycl::single_task API:
@@ -100,11 +88,11 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           { 
             size_t row, col, m, n, k;
             float s = 0;
+            // allocate local memory to hold a block of data from A, B
 	    [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
 	    [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
 
             // load blocks of data to local memory from global memory
-	    //#pragma unroll 8
             for (m=0; m < BLOCK_SIZE; m++)
               for ( n=0; n < BLOCK_SIZE; n++)
               {
