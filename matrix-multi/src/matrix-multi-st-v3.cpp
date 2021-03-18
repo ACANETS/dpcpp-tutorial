@@ -24,22 +24,20 @@ using namespace sycl;
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
+//constexpr size_t a_rows = 896;
 constexpr size_t a_rows = 800;
 constexpr size_t a_columns = 1600;
 constexpr size_t b_columns = 3200;
 
+//#define BLOCK_SIZE 64
 #define BLOCK_SIZE 32
 // define FPGA onchip memory banks and widths
 #define NUM_BANKS 32
+//#define BANK_WIDTH 512
 #define BANK_WIDTH 128
 #if (BLOCK_SIZE*BLOCK_SIZE) != (NUM_BANKS*BANK_WIDTH/4)
 #error 'FPGA onchip memory needs correct number of banks and depth'
 #endif
-
-using ProducerToConsumerPipe = INTEL::pipe<  // Defined in the SYCL headers.
-    class ProducerConsumerPipe,              // An identifier for the pipe.
-    float,                                   // The type of data in the pipe.
-    BLOCK_SIZE*BLOCK_SIZE+2>;                // The capacity of the pipe.
 
 class MMstv3;
 class MMstv3_cplusd;
