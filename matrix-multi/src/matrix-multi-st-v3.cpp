@@ -62,15 +62,6 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
   buffer<float, 2> sum_buf(reinterpret_cast<float *>(matrix_d_parallel), num_items);
 
   auto step = 0;
-  for(int i=0; i < a_rows*a_columns/(BLOCK_SIZE*BLOCK_SIZE); i++) {
-    // the block indices of the block in A 
-    auto block_row_a = i / (a_columns/BLOCK_SIZE);
-    auto block_col_a = i % (a_columns/BLOCK_SIZE);
-    // we need to calculate dot-product with all the blocks in B where
-    // the row number is equal to block_col_a
-    auto block_row_b = block_col_a;
-    for(int j=0; j<b_columns/BLOCK_SIZE; j++)
-    { 
       // Submit a command group to the queue by a lambda function that contains the
       // data access permission and device computation (kernel).
       event e = q.submit([&](handler &h) {
@@ -88,6 +79,15 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           { 
             size_t row, col, m, n, k;
             float s = 0;
+  for(int i=0; i < a_rows*a_columns/(BLOCK_SIZE*BLOCK_SIZE); i++) {
+    // the block indices of the block in A 
+    auto block_row_a = i / (a_columns/BLOCK_SIZE);
+    auto block_col_a = i % (a_columns/BLOCK_SIZE);
+    // we need to calculate dot-product with all the blocks in B where
+    // the row number is equal to block_col_a
+    auto block_row_b = block_col_a;
+    for(int j=0; j<b_columns/BLOCK_SIZE; j++)
+    { 
             // allocate local memory to hold a block of data from A, B
 	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
 	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
@@ -123,6 +123,8 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
                 d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n] ;
               }  
 
+    } // for j
+  } // for i
           });
       }); // event e
 #if FPGA || FPGA_PROFILE
@@ -138,11 +140,9 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 
       total_kernel_time_ns += kernel_time_ns;
 #endif
-    } // for j
-  } // for i
 
   //
-  event e = q.submit([&](handler &h) {
+  e = q.submit([&](handler &h) {
     auto c = c_buf.get_access<access::mode::read, access::target::global_buffer>(h);
     auto d = sum_buf.get_access<access::mode::write, access::target::global_buffer>(h);
       
