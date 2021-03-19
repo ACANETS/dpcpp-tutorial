@@ -80,18 +80,6 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
         auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
       
-        // allocate local memory to hold a block of data from A, B
-	/*
-        accessor <float, 2,
-          access::mode::read_write,
-          access::target::local>
-	local_mem_a(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
-
-        accessor <float, 2,
-          access::mode::read_write,
-          access::target::local>
-        local_mem_b(range<2>(BLOCK_SIZE, BLOCK_SIZE), h);
-	*/
 
         // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
         // using the cl::sycl::single_task API:
@@ -100,30 +88,40 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           { 
             size_t row, col, m, n, k;
             float s = 0;
-	    [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
-	    [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
+            // allocate local memory to hold a block of data from A, B
+	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
+	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
+	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
 
             // load blocks of data to local memory from global memory
-	    //#pragma unroll 8
             for (m=0; m < BLOCK_SIZE; m++)
               for ( n=0; n < BLOCK_SIZE; n++)
               {
                 local_mem_a[m][n] = a[block_row_a*BLOCK_SIZE + m][block_col_a*BLOCK_SIZE + n];
                 local_mem_b[m][n] = b[block_row_b*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
+                local_mem_d[m][n] = d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
               }  
             // element-wise multiplication and accumulation
             for (m=0; m < BLOCK_SIZE; m++)
               for ( n=0; n < BLOCK_SIZE; n++) {
                 s = 0;
-	        #pragma unroll
+	              #pragma unroll
                 for (k=0; k < BLOCK_SIZE; k++)
                   s += local_mem_a[m][k] * local_mem_b[k][n]; 
                 // add to Matrix D
                 // the corresponding row and col in D
                 row = block_row_a * BLOCK_SIZE + m;
                 col = j * BLOCK_SIZE + n;
-                d[row][col] += s;
+                //d[row][col] += s;
+                local_mem_d[m][n] += s;
               }
+
+            // write d back to global memory
+            for (m=0; m < BLOCK_SIZE; m++)
+              for ( n=0; n < BLOCK_SIZE; n++)
+              {
+                d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n] ;
+              }  
 
           });
       }); // event e
