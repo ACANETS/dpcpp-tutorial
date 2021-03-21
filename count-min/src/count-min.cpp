@@ -9,6 +9,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <fstream>
 
 #include <CL/sycl.hpp>
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
@@ -27,7 +28,7 @@ using namespace std::chrono;
 // NOTE: this tutorial assumes you are using a sycl::vec datatype. Therefore, 
 // 'Type' can only be changed to a different vector datatype (e.g. int16,
 // ulong8, etc...)
-using Type = long8;
+using Type = char16;
 
 ///////////////////////////////////////////////////////////////////////////////
 // forward declaration of the functions in this file
@@ -52,6 +53,17 @@ void PrintPerformanceInfo(std::string print_prefix, size_t count,
                           std::vector<double>& process_time_ms);
 ///////////////////////////////////////////////////////////////////////////////
 
+std::ostream& operator<<(std::ostream& os, const char16 &input)
+{
+    //for (auto const& i: input) {
+    //    os << i << " ";
+    //}
+    for (auto it = 0; it < 16; it++)
+    {
+        std::cout << input[it];
+    }    
+    return os;
+}
 
 int main(int argc, char* argv[]) {
   // default values
@@ -175,7 +187,23 @@ int main(int argc, char* argv[]) {
     // consume) has infinite bandwidth. However, if the producer of data cannot
     // produce data faster than our FPGA can consume it, the CPU producer will
     // bottleneck the total throughput of the design.
-    std::generate_n(in, total_count, [] { return Type(rand() % 100); });
+    //std::generate_n(in, total_count, [] { return Type(rand() % 100); });
+
+    // read input strings from file.
+    std::ifstream infile("kafka-words.txt");
+    std::cout << "reading kafka-words.txt" << std::endl;
+    std::generate_n(in, total_count, [&infile] { 
+      std::string a;
+      infile>>a; 
+      //std::cout<<a;
+      std::vector<char> b(a.begin(), a.end());
+      Type c;
+      for(auto k=0; k < 16; k++)
+        c[k] = b[k];
+      return Type(c);});
+    std::cout<<"test "<<std::endl;
+    std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
+    return 0;
 
     // a lambda function to validate the results
     auto validate_results = [&] {
