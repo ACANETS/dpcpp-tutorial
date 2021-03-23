@@ -1,5 +1,6 @@
-set(SOURCE_FILE count-min.cpp)
+set(SOURCE_FILE count-min.cpp count_min_sketch.cpp)
 set(TARGET_NAME count-min)
+#list(APPEND ${SOURCE_FILE} count_min_sketch.cpp)
 set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
 set(FPGA_TARGET ${TARGET_NAME}.fpga)
 set(REPORTS_TARGET ${TARGET_NAME}_report)

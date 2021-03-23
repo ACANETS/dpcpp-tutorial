@@ -8,6 +8,8 @@
 #include <CL/sycl.hpp>
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 
+#include "count_min_sketch.hpp"
+
 using namespace sycl;
 
 // Forward declare the kernel names to reduce name mangling
@@ -15,7 +17,8 @@ class K;
 
 // submit the kernel for the single-kernel design
 template<typename T>
-event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count) {
+event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count, 
+  const class CountMinSketch &cms) {
   auto e = q.submit([&](handler& h) {
     h.single_task<K>([=]() [[intel::kernel_args_restrict]] {
       // using a host_ptr class tells the compiler that this pointer lives in
@@ -26,6 +29,9 @@ event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count) {
       for (size_t i = 0; i < count; i++) {
         // do a simple copy - more complex computation can go here
         T data = *(in + i);
+        // update hash tables in CM sketch
+        cms.update(data,1);
+
         *(out + i) = data;
       }
     });

@@ -20,6 +20,7 @@
 
 #include "single_kernel.hpp"
 #include "multi_kernel.hpp"
+#include "count_min_sketch.hpp"
 
 using namespace sycl;
 using namespace std::chrono;
@@ -35,12 +36,12 @@ using Type = char16;
 // the function definitions are all below the main() function in this file
 template<typename T>
 void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
-                   size_t iterations);
+                   size_t iterations, class CountMinSketch &cms);
 
 template<typename T>
 void DoWorkSingleKernel(queue& q, T* in, T* out,
                         size_t chunks, size_t chunk_count, size_t total_count,
-                        size_t inflight_kernels, size_t iterations);
+                        size_t inflight_kernels, size_t iterations, class CountMinSketch &cms);
 
 template <typename T>
 void DoWorkMultiKernel(queue& q, T* in, T* out,
@@ -76,6 +77,8 @@ int main(int argc, char* argv[]) {
   size_t chunk_count = 1 << 15;   // 32768
   size_t iterations = 5;
 #endif
+
+  const class CountMinSketch cms(0.01, 0.1);
 
   // This is the number of kernels we will have in the queue at a single time.
   // If this number is set too low (e.g. 1) then we don't take advantage of
@@ -226,7 +229,7 @@ int main(int argc, char* argv[]) {
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
     std::cout << "Running the basic offload kernel\n";
-    DoWorkOffload(q, in, out, total_count, iterations);
+    DoWorkOffload(q, in, out, total_count, iterations, cms);
 
     // validate the results using the lambda
     passed &= validate_results();
@@ -239,7 +242,7 @@ int main(int argc, char* argv[]) {
     // by keeping at most 'inflight_kernels' in the SYCL queue at a time
     std::cout << "Running the latency optimized single-kernel design\n";
     DoWorkSingleKernel(q, in, out, chunks, chunk_count, total_count,
-                       inflight_kernels, iterations);
+                       inflight_kernels, iterations, cms);
 
     // validate the results using the lambda
     passed &= validate_results();
@@ -291,7 +294,7 @@ int main(int argc, char* argv[]) {
 // the basic offload kernel version (doesn't care about latency)
 template<typename T>
 void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
-                   size_t iterations) {
+                   size_t iterations, const class CountMinSketch &cms) {
   // timing data
   std::vector<double> latency_ms(iterations);
   std::vector<double> process_time_ms(iterations);
@@ -301,7 +304,7 @@ void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
 
     // submit single kernel for entire buffer
     // this function is defined in 'single_kernel.hpp'
-    auto e = SubmitSingleWorker(q, in, out, total_count);
+    auto e = SubmitSingleWorker(q, in, out, total_count, cms);
 
     // wait on the kernel to finish
     e.wait();
@@ -331,8 +334,8 @@ void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
 template <typename T>
 void DoWorkSingleKernel(queue& q, T* in, T* out,
                         size_t chunks, size_t chunk_count, size_t total_count,
-                        size_t inflight_kernels, size_t iterations) {
-  // timing data
+                        size_t inflight_kernels, size_t iterations, 
+                        class CountMinSketch &cms) {
   std::vector<double> latency_ms(iterations);
   std::vector<double> process_time_ms(iterations);
 
@@ -375,7 +378,7 @@ void DoWorkSingleKernel(queue& q, T* in, T* out,
         size_t chunk_offset = in_chunk*chunk_count; 
         // this function is defined in 'single_kernel.hpp'
         auto e = SubmitSingleWorker(q, in + chunk_offset, out + chunk_offset,
-                                    chunk_count);
+                                    chunk_count, cms);
 
         // push the kernel event into the queue
         event_q.push(e);
