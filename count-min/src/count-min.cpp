@@ -78,12 +78,8 @@ int main(int argc, char* argv[]) {
   size_t iterations = 5;
 #endif
 
-<<<<<<< HEAD
-  const class CountMinSketch cms(0.001, 0.1);
-=======
   int C[NUM_D][NUM_W];
   int hashes[NUM_D][2];
->>>>>>> ae27d3e65314d537882bc985cabdffc9713dbf45
 
   // This is the number of kernels we will have in the queue at a single time.
   // If this number is set too low (e.g. 1) then we don't take advantage of
