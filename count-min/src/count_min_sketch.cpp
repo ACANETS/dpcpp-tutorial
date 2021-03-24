@@ -39,7 +39,7 @@ void cms_init(int C[NUM_D][NUM_W], int hashes[NUM_D][2])
 } 
 
 // generates a hash value for a char16
-SYCL_EXTERNAL unsigned int cms_hashstr(sycl::char16 str) {
+unsigned int cms_hashstr(sycl::char16 str) {
   unsigned long hash = 5381;
   int c=0;
   while (c < 16) {
@@ -50,7 +50,7 @@ SYCL_EXTERNAL unsigned int cms_hashstr(sycl::char16 str) {
 }
 
 // countMinSketch update item count 
-SYCL_EXTERNAL void cms_update(int C[NUM_D][NUM_W], 
+void cms_update(int C[NUM_D][NUM_W], 
   int hashes[NUM_D][2], sycl::char16 str, int c) {
   //cms_total = cms_total + c;
   unsigned int hashval = 0;
