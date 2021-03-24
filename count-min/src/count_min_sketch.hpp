@@ -15,6 +15,20 @@
 # define LONG_PRIME 32993
 # define MIN(a,b)  (a < b ? a : b)
 
+// define constants for count-min sketch 
+// the error and probability
+#define EP 0.001
+#define GAMMA 0.01
+// the size of the counter array and hash table
+// determined by the EP and GAMMA
+// NOTE: these numbers should agree with EP and GAMMA
+#define NUM_D 24
+#define NUM_W 3
+
+extern int cms_total;
+extern int C[NUM_D][NUM_W];
+extern int hashes[NUM_D][2];
+
 /** CountMinSketch class definition here **/
 class CountMinSketch {
   // width, depth 

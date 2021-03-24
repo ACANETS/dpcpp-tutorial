@@ -6,9 +6,12 @@
 
 #include <CL/sycl.hpp>
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
-# include "count_min_sketch.hpp"
+
+#include "count_min_sketch.hpp"
 
 using namespace std;
+
+int cms_total = 0;
 
 /**
    Class definition for CountMinSketch.
@@ -21,6 +24,18 @@ using namespace std;
    unsigned int estimate(char *item);
 **/
 
+void cms_init(int C[NUM_D][NUM_W], int hashes[NUM_D][2])
+{
+  for (auto i = 0; i < NUM_D; i++) {
+    for (auto j = 0; j < NUM_W; j++) {
+      C[i][j] = 0;
+    }
+  }
+  for (auto i = 0; i < NUM_D; i++) {
+    hashes[i][0] = int(float(rand())*float(LONG_PRIME)/float(RAND_MAX) + 1);
+    hashes[i][1] = int(float(rand())*float(LONG_PRIME)/float(RAND_MAX) + 1);
+  }
+} 
 
 // CountMinSketch constructor
 // ep -> error 0.01 < ep < 1 (the smaller the better)

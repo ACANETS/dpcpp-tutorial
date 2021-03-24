@@ -17,8 +17,7 @@ class K;
 
 // submit the kernel for the single-kernel design
 template<typename T>
-event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count, 
-  const class CountMinSketch &cms) {
+event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count) {
   auto e = q.submit([&](handler& h) {
     h.single_task<K>([=]() [[intel::kernel_args_restrict]] {
       // using a host_ptr class tells the compiler that this pointer lives in
@@ -33,6 +32,7 @@ event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count,
         T data = *(in + i);
         // update hash tables in CM sketch
         //data = data & cms.total;
+        //cms_update();
 
         *(out + i) = data;
       }
