@@ -36,12 +36,12 @@ using Type = char16;
 // the function definitions are all below the main() function in this file
 template<typename T>
 void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
-                   size_t iterations, class CountMinSketch &cms);
+                   size_t iterations, const class CountMinSketch &cms);
 
 template<typename T>
 void DoWorkSingleKernel(queue& q, T* in, T* out,
                         size_t chunks, size_t chunk_count, size_t total_count,
-                        size_t inflight_kernels, size_t iterations, class CountMinSketch &cms);
+                        size_t inflight_kernels, size_t iterations, const class CountMinSketch &cms);
 
 template <typename T>
 void DoWorkMultiKernel(queue& q, T* in, T* out,
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
   size_t iterations = 5;
 #endif
 
-  const class CountMinSketch cms(0.01, 0.1);
+  const class CountMinSketch cms(0.001, 0.1);
 
   // This is the number of kernels we will have in the queue at a single time.
   // If this number is set too low (e.g. 1) then we don't take advantage of

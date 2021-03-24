@@ -33,8 +33,6 @@ class CountMinSketch {
   // function
   //unsigned int aj, bj;
 
-  // total count so far
-  unsigned int total; 
 
   // array of arrays of counters
   int **C;
@@ -47,6 +45,9 @@ class CountMinSketch {
   void genajbj(int **hashes, int i);
 
 public:
+  // total count so far
+  unsigned int total; 
+
   // constructor
   CountMinSketch(float eps, float gamma);
   

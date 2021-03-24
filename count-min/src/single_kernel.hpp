@@ -26,11 +26,13 @@ event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count,
       host_ptr<T> in(in_ptr);
       host_ptr<T> out(out_ptr);
 
+      // allocate local memory for counter arrays and hash tables
+      
       for (size_t i = 0; i < count; i++) {
         // do a simple copy - more complex computation can go here
         T data = *(in + i);
         // update hash tables in CM sketch
-        cms.update(data,1);
+        //data = data & cms.total;
 
         *(out + i) = data;
       }

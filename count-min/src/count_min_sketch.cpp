@@ -26,7 +26,7 @@ using namespace std;
 // ep -> error 0.01 < ep < 1 (the smaller the better)
 // gamma -> probability for error (the smaller the better) 0 < gamm < 1
 CountMinSketch::CountMinSketch(float ep, float gamm) {
-  if (!(0.009 <= ep && ep < 1)) {
+  if (!(0.0009 <= ep && ep < 1)) {
     cout << "eps must be in this range: [0.01, 1)" << endl;
     exit(EXIT_FAILURE);
   } else if (!(0 < gamm && gamm < 1)) {
@@ -47,6 +47,8 @@ CountMinSketch::CountMinSketch(float ep, float gamm) {
       C[i][j] = 0;
     }
   }
+  std::cout<<"counter array sizes = " << d*w*sizeof(int) << " bytes" <<std::endl;
+
   // initialize d pairwise independent hashes
   srand(time(NULL));
   hashes = new int* [d];
@@ -54,6 +56,8 @@ CountMinSketch::CountMinSketch(float ep, float gamm) {
     hashes[i] = new int[2];
     genajbj(hashes, i);
   }
+  std::cout<<"hash table sizes = " << d*2*sizeof(int) << " bytes" <<std::endl;
+
 }
 
 // CountMinSkectch destructor
