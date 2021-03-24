@@ -36,7 +36,7 @@ using Type = char16;
 // the function definitions are all below the main() function in this file
 template<typename T>
 void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
-                   size_t iterations);
+                   size_t iterations, buffer<int, 2> C_buf, buffer<int,2> hashes_buf);
 
 template<typename T>
 void DoWorkSingleKernel(queue& q, T* in, T* out,
@@ -67,6 +67,9 @@ std::ostream& operator<<(std::ostream& os, const char16 &input)
     return os;
 }
 
+  int C[NUM_D][NUM_W];
+  int hashes[NUM_D][2];
+
 int main(int argc, char* argv[]) {
   // default values
 #if defined(FPGA_EMULATOR)
@@ -79,13 +82,20 @@ int main(int argc, char* argv[]) {
   size_t iterations = 5;
 #endif
 
-  int C[NUM_D][NUM_W];
-  int hashes[NUM_D][2];
 
-  cms_init(C, hashes);
+  // create a CMS on host
+  CountMinSketch cm(0.0001, 0.01);
+  // initialize counter array
+  cms_init_C(C);
+  // initilize hash using host CMS' hashes
+  cms_init_hashes(hashes, cm);
 
+  // create buffers for device
   buffer<int, 2> C_buf(reinterpret_cast<int *>(C),range(NUM_D, NUM_W));
   buffer<int, 2> hashes_buf(reinterpret_cast<int *>(hashes), range(NUM_D,2));
+
+  // write initialized C counter array and hash functions (co-efficients) to buffer
+  //auto h_acc = C_buf.get_access(access::mode::write)  
 
   // This is the number of kernels we will have in the queue at a single time.
   // If this number is set too low (e.g. 1) then we don't take advantage of
@@ -211,9 +221,19 @@ int main(int argc, char* argv[]) {
       for(auto k=0; k < 16; k++)
         c[k] = b[k];
       return Type(c);});
-    std::cout<<"test "<<std::endl;
-    std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
-    return 0;
+    //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
+
+    //return 0;
+
+    // run Count-Min sketch on host
+    //for (size_t i = 0; i < total_count; i++) {
+    //  cm.update(in[i], 1);
+    //}
+
+    // do estimate using CMS on host
+    //for (size_t i = 0; i < 10; i++) {
+    //  std::cout<<in[i]<<" "<<cm.estimate(in[i])<<std::endl;
+    //}
 
     // a lambda function to validate the results
     auto validate_results = [&] {
@@ -236,13 +256,16 @@ int main(int argc, char* argv[]) {
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
     std::cout << "Running the basic offload kernel\n";
-    DoWorkOffload(q, in, out, total_count, iterations);
+    DoWorkOffload(q, in, out, total_count, iterations, C_buf, hashes_buf);
 
     // validate the results using the lambda
     passed &= validate_results();
 
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
+
+    //FIXME DEBUG
+    //return 0;
 
     ////////////////////////////////////////////////////////////////////////////
     // run the optimized (for latency) version that uses fast kernel relaunch
@@ -257,6 +280,7 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
 
+#if 0
     ////////////////////////////////////////////////////////////////////////////
     // run the optimized (for latency) version with multiple kernels that uses
     // fast kernel relaunch by keeping at most 'inflight_kernels' in the SYCL
@@ -270,6 +294,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
+#endif
 
     // free the USM pointers
     sycl::free(in, q);

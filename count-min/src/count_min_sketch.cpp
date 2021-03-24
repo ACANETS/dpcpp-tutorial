@@ -38,6 +38,23 @@ void cms_init(int C[NUM_D][NUM_W], int hashes[NUM_D][2])
   }
 } 
 
+void cms_init_C(int C[NUM_D][NUM_W])
+{
+  for (auto i = 0; i < NUM_D; i++) {
+    for (auto j = 0; j < NUM_W; j++) {
+      C[i][j] = 0;
+    }
+  }
+} 
+
+void cms_init_hashes(int hashes[NUM_D][2], CountMinSketch &cm)
+{
+    // initialize d pairwise independent hashes
+  for (auto i = 0; i < NUM_D; i++) {
+    hashes[i][0] = cm.hashes[i][0];
+    hashes[i][1] = cm.hashes[i][1];
+  }
+}
 // generates a hash value for a char16
 unsigned int cms_hashstr(sycl::char16 str) {
   unsigned long hash = 5381;
@@ -78,8 +95,9 @@ unsigned int cms_estimate(int C[NUM_D][NUM_W],
 // ep -> error 0.01 < ep < 1 (the smaller the better)
 // gamma -> probability for error (the smaller the better) 0 < gamm < 1
 CountMinSketch::CountMinSketch(float ep, float gamm) {
-  if (!(0.0009 <= ep && ep < 1)) {
-    cout << "eps must be in this range: [0.01, 1)" << endl;
+  /*
+  if (!(0.0001 <= ep && ep < 1)) {
+    cout << "eps = "<<ep << " must be in this range: [0.0001, 1)" << endl;
     exit(EXIT_FAILURE);
   } else if (!(0 < gamm && gamm < 1)) {
     cout << "gamma must be in this range: (0,1)" << endl;
@@ -89,6 +107,11 @@ CountMinSketch::CountMinSketch(float ep, float gamm) {
   gamma = gamm;
   w = ceil(exp(1)/eps);
   d = ceil(log(1/gamma));
+  */
+  w = NUM_W;
+  d = NUM_D;
+  cout << "on Host: CM round up w = " << NUM_W << "; d = " << NUM_D << endl;
+
   total = 0;
   // initialize counter array of arrays, C
   C = new int *[d];
@@ -169,6 +192,12 @@ unsigned int CountMinSketch::estimate(int item) {
 
 // CountMinSketch estimate item count (string)
 unsigned int CountMinSketch::estimate(const char *str) {
+  int hashval = hashstr(str);
+  return estimate(hashval);
+}
+
+// CountMinSketch estimate item count (string)
+unsigned int CountMinSketch::estimate(sycl::char16 str) {
   int hashval = hashstr(str);
   return estimate(hashval);
 }
