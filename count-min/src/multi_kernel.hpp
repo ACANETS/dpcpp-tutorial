@@ -15,7 +15,7 @@ class K0;
 class K1;
 class K2;
 class P;
-class C;
+class Con;
 
 //
 // A generic kernel to produce data from host memory to a SYCL pipe.
@@ -57,7 +57,7 @@ event SubmitProducer(queue &q, T* in_ptr, size_t size) {
 template<typename T, typename OutPipe>
 event SubmitConsumer(queue &q, T* out_ptr, size_t size) {
   auto e = q.submit([&](handler& h) {
-    h.single_task<C>([=]() [[intel::kernel_args_restrict]] {
+    h.single_task<Con>([=]() [[intel::kernel_args_restrict]] {
       host_ptr<T> out(out_ptr);
       for (size_t i = 0; i < size; i++) {
         auto data = OutPipe::read();

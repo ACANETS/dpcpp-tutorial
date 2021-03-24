@@ -6,8 +6,9 @@
     minor mods by Yan Luo
 **/
 
-#ifndef CMS_HPP
-#define CMS_HPP
+#ifndef __CMS_HPP__
+#define __CMS_HPP__
+
 #include <CL/sycl.hpp>
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 
@@ -16,18 +17,27 @@
 # define MIN(a,b)  (a < b ? a : b)
 
 // define constants for count-min sketch 
-// the error and probability
-#define EP 0.001
-#define GAMMA 0.01
-// the size of the counter array and hash table
-// determined by the EP and GAMMA
-// NOTE: these numbers should agree with EP and GAMMA
-#define NUM_D 24
-#define NUM_W 3
+// EPS the error, GAMMA the probability
+// the size of the counter array is determined by the EP and GAMMA
+// NOTE: these numbers should agree with EPS and GAMMA
+//#define EPS 0.001
+//#define GAMMA 0.01
+//#define NUM_W 2719
+//#define NUM_D 5
+
+#define EPS 0.0001
+#define GAMMA 0.001
+#define NUM_W 32768  //round up from 27183
+#define NUM_D 8 //round up from 7
 
 extern int cms_total;
 extern int C[NUM_D][NUM_W];
 extern int hashes[NUM_D][2];
+void cms_init(int C[NUM_D][NUM_W], int hashes[NUM_D][2]);
+SYCL_EXTERNAL unsigned int cms_hashstr(sycl::char16 str);
+SYCL_EXTERNAL void cms_update(int local_mem_C[NUM_D][NUM_W], 
+  int local_mem_hashes[NUM_D][2], sycl::char16 str, int c);
+unsigned int cms_estimate(sycl::char16 str) ;
 
 /** CountMinSketch class definition here **/
 class CountMinSketch {
@@ -47,6 +57,8 @@ class CountMinSketch {
   // function
   //unsigned int aj, bj;
 
+  // total count so far
+  unsigned int total; 
 
   // array of arrays of counters
   int **C;
@@ -59,8 +71,6 @@ class CountMinSketch {
   void genajbj(int **hashes, int i);
 
 public:
-  // total count so far
-  unsigned int total; 
 
   // constructor
   CountMinSketch(float eps, float gamma);

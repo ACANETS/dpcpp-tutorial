@@ -31,11 +31,48 @@ void cms_init(int C[NUM_D][NUM_W], int hashes[NUM_D][2])
       C[i][j] = 0;
     }
   }
+  // initialize d pairwise independent hashes
   for (auto i = 0; i < NUM_D; i++) {
     hashes[i][0] = int(float(rand())*float(LONG_PRIME)/float(RAND_MAX) + 1);
     hashes[i][1] = int(float(rand())*float(LONG_PRIME)/float(RAND_MAX) + 1);
   }
 } 
+
+// generates a hash value for a char16
+SYCL_EXTERNAL unsigned int cms_hashstr(sycl::char16 str) {
+  unsigned long hash = 5381;
+  int c=0;
+  while (c < 16) {
+    hash = ((hash << 5) + hash) + str[c]; /* hash * 33 + c */
+    c++;
+  }
+  return hash;
+}
+
+// countMinSketch update item count 
+SYCL_EXTERNAL void cms_update(int C[NUM_D][NUM_W], 
+  int hashes[NUM_D][2], sycl::char16 str, int c) {
+  //cms_total = cms_total + c;
+  unsigned int hashval = 0;
+  unsigned int item = cms_hashstr(str);
+  for (unsigned int j = 0; j < NUM_D; j++) {
+    hashval = (hashes[j][0]*item+hashes[j][1])%NUM_W;
+    C[j][hashval] = C[j][hashval] + c;
+  }
+}
+
+// CountMinSketch estimate item count 
+unsigned int cms_estimate(int C[NUM_D][NUM_W], 
+  int hashes[NUM_D][2], sycl::char16 str) {
+  int minval = numeric_limits<int>::max();
+  unsigned int hashval = 0;
+  unsigned int item = cms_hashstr(str);
+  for (unsigned int j = 0; j < NUM_D; j++) {
+    hashval = (hashes[j][0]*item+hashes[j][1])%NUM_W;
+    minval = MIN(minval, C[j][hashval]);
+  }
+  return minval;
+}
 
 // CountMinSketch constructor
 // ep -> error 0.01 < ep < 1 (the smaller the better)
@@ -153,8 +190,7 @@ unsigned int CountMinSketch::hashstr(const char *str) {
   return hash;
 }
 
-// generates a hash value for a sting
-// same as djb2 hash function
+// generates a hash value for a char16
 unsigned int CountMinSketch::hashstr(sycl::char16 str) {
   unsigned long hash = 5381;
   int c=0;

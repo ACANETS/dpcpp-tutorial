@@ -36,12 +36,13 @@ using Type = char16;
 // the function definitions are all below the main() function in this file
 template<typename T>
 void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
-                   size_t iterations, const class CountMinSketch &cms);
+                   size_t iterations);
 
 template<typename T>
 void DoWorkSingleKernel(queue& q, T* in, T* out,
                         size_t chunks, size_t chunk_count, size_t total_count,
-                        size_t inflight_kernels, size_t iterations, const class CountMinSketch &cms);
+                        size_t inflight_kernels, size_t iterations, 
+                        buffer<int,2> C_buf, buffer<int,2> hashes_buf);
 
 template <typename T>
 void DoWorkMultiKernel(queue& q, T* in, T* out,
@@ -80,6 +81,11 @@ int main(int argc, char* argv[]) {
 
   int C[NUM_D][NUM_W];
   int hashes[NUM_D][2];
+
+  cms_init(C, hashes);
+
+  buffer<int, 2> C_buf(reinterpret_cast<int *>(C),range(NUM_D, NUM_W));
+  buffer<int, 2> hashes_buf(reinterpret_cast<int *>(hashes), range(NUM_D,2));
 
   // This is the number of kernels we will have in the queue at a single time.
   // If this number is set too low (e.g. 1) then we don't take advantage of
@@ -230,7 +236,7 @@ int main(int argc, char* argv[]) {
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
     std::cout << "Running the basic offload kernel\n";
-    DoWorkOffload(q, in, out, total_count, iterations, cms);
+    DoWorkOffload(q, in, out, total_count, iterations);
 
     // validate the results using the lambda
     passed &= validate_results();
@@ -243,7 +249,7 @@ int main(int argc, char* argv[]) {
     // by keeping at most 'inflight_kernels' in the SYCL queue at a time
     std::cout << "Running the latency optimized single-kernel design\n";
     DoWorkSingleKernel(q, in, out, chunks, chunk_count, total_count,
-                       inflight_kernels, iterations, cms);
+                       inflight_kernels, iterations, C_buf, hashes_buf);
 
     // validate the results using the lambda
     passed &= validate_results();
@@ -295,7 +301,7 @@ int main(int argc, char* argv[]) {
 // the basic offload kernel version (doesn't care about latency)
 template<typename T>
 void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
-                   size_t iterations, const class CountMinSketch &cms) {
+                   size_t iterations, buffer<int, 2> C_buf, buffer<int,2> hashes_buf) {
   // timing data
   std::vector<double> latency_ms(iterations);
   std::vector<double> process_time_ms(iterations);
@@ -305,7 +311,7 @@ void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
 
     // submit single kernel for entire buffer
     // this function is defined in 'single_kernel.hpp'
-    auto e = SubmitSingleWorker(q, in, out, total_count, cms);
+    auto e = SubmitSingleWorker(q, in, out, total_count, C_buf, hashes_buf);
 
     // wait on the kernel to finish
     e.wait();
@@ -335,8 +341,8 @@ void DoWorkOffload(queue& q, T* in, T* out, size_t total_count,
 template <typename T>
 void DoWorkSingleKernel(queue& q, T* in, T* out,
                         size_t chunks, size_t chunk_count, size_t total_count,
-                        size_t inflight_kernels, size_t iterations, 
-                        class CountMinSketch &cms) {
+                        size_t inflight_kernels, size_t iterations,
+                        buffer<int,2> C_buf, buffer<int,2> hashes_buf) {
   std::vector<double> latency_ms(iterations);
   std::vector<double> process_time_ms(iterations);
 
@@ -379,7 +385,7 @@ void DoWorkSingleKernel(queue& q, T* in, T* out,
         size_t chunk_offset = in_chunk*chunk_count; 
         // this function is defined in 'single_kernel.hpp'
         auto e = SubmitSingleWorker(q, in + chunk_offset, out + chunk_offset,
-                                    chunk_count, cms);
+                                    chunk_count, C_buf, hashes_buf);
 
         // push the kernel event into the queue
         event_q.push(e);

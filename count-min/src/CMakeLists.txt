@@ -1,4 +1,5 @@
-set(SOURCE_FILE count-min.cpp count_min_sketch.cpp)
+#set(SOURCE_FILE count-min.cpp count_min_sketch.cpp)
+file(GLOB_RECURSE SOURCE_FILE "*.cpp")
 set(TARGET_NAME count-min)
 #list(APPEND ${SOURCE_FILE} count_min_sketch.cpp)
 set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
@@ -50,7 +51,9 @@ if(WIN32)
                        COMMAND ${CMAKE_CXX_COMPILER} /EHsc ${HARDWARE_LINK_FLAGS_LIST} -fsycl-link ${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE_FILE} -o ${CMAKE_BINARY_DIR}/${DEVICE_OBJ_FILE}
                        DEPENDS ${SOURCE_FILE})
 else()
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE_FILE} ${SOURCE_FILE} COPYONLY)
+    #configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE_FILE} ${SOURCE_FILE} COPYONLY)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/count-min.cpp count-min.cpp COPYONLY)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/count_min_sketch.cpp count_min_sketch.cpp COPYONLY)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/multi_kernel.hpp multi_kernel.hpp COPYONLY)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/single_kernel.hpp single_kernel.hpp COPYONLY)
 
