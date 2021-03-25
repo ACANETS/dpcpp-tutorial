@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <utility>
 #include <fstream>
+#include <map>
 
 #include <CL/sycl.hpp>
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
@@ -24,6 +25,8 @@
 
 using namespace sycl;
 using namespace std::chrono;
+
+#define FILE_NAME  "kafka-words.txt"
 
 // data types and constants
 // NOTE: this tutorial assumes you are using a sycl::vec datatype. Therefore, 
@@ -201,21 +204,12 @@ int main(int argc, char* argv[]) {
       std::terminate();
     }
 
-    // generate the random input data
-    // NOTE: by generating all of the data ahead of time, we are essentially
-    // assuming that the producer of data (producing data for the FPGA to
-    // consume) has infinite bandwidth. However, if the producer of data cannot
-    // produce data faster than our FPGA can consume it, the CPU producer will
-    // bottleneck the total throughput of the design.
-    //std::generate_n(in, total_count, [] { return Type(rand() % 100); });
-
     // read input strings from file.
-    std::ifstream infile("kafka-words.txt");
-    std::cout << "reading kafka-words.txt" << std::endl;
+    std::ifstream infile(FILE_NAME);
+    std::cout << "reading " << total_count <<" words from "<< FILE_NAME << std::endl;
     std::generate_n(in, total_count, [&infile] { 
       std::string a;
       infile>>a; 
-      //std::cout<<a;
       std::vector<char> b(a.begin(), a.end());
       Type c;
       for(auto k=0; k < 16; k++)
@@ -223,17 +217,30 @@ int main(int argc, char* argv[]) {
       return Type(c);});
     //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
 
-    //return 0;
-
+    // do brute force search and count
+    std::map<unsigned int, int> true_count;
+    for (size_t i = 0; i < total_count; i++) {
+      // init map for brute force search count
+      unsigned int item = cms_hashstr(in[i]);
+      true_count[item] = 0;
+    }
     // run Count-Min sketch on host
-    //for (size_t i = 0; i < total_count; i++) {
-    //  cm.update(in[i], 1);
-    //}
+    for (size_t i = 0; i < total_count; i++) {
+      cm.update(in[i], 1);
+      // brute force search count
+      unsigned int item = cms_hashstr(in[i]);
+      true_count[item] ++;
+    }
 
-    // do estimate using CMS on host
-    //for (size_t i = 0; i < 10; i++) {
-    //  std::cout<<in[i]<<" "<<cm.estimate(in[i])<<std::endl;
-    //}
+    // do estimate using CMS on host and compare with true count
+    std::cout<<"On Host Only:\n";
+    std::cout<<"WORDS \t"<<"CM_Estimate\t"<<"True_Count"<<std::endl;
+    for (size_t i = 0; i < 10; i++) {
+      unsigned int item = cms_hashstr(in[i]);
+      std::cout<<in[i]<<"\t\t"<<cm.estimate(in[i])<<"\t"
+                <<true_count[item]<<std::endl;
+    }
+    std::cout<<std::endl;
 
     // a lambda function to validate the results
     auto validate_results = [&] {
