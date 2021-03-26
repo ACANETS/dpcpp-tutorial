@@ -7,8 +7,9 @@ cmake_minimum_required (VERSION 2.8)
 
 project(count-min)
 
-# copy image files
+# copy text files
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/kafka-words.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/kafka-words-x2.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

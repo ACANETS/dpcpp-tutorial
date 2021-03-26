@@ -100,6 +100,7 @@ void cms_init_hashes(int hashes[NUM_D][2], class CountMinSketch &cm);
 unsigned int cms_hashstr(sycl::char16 str);
 SYCL_EXTERNAL void cms_update(int local_mem_C[NUM_D][NUM_W], 
   int local_mem_hashes[NUM_D][2], sycl::char16 str, int c);
-unsigned int cms_estimate(sycl::char16 str) ;
+unsigned int cms_estimate(int local_mem_C[NUM_D][NUM_W], 
+  int local_mem_hashes[NUM_D][2], sycl::char16 str) ;
 
 #endif

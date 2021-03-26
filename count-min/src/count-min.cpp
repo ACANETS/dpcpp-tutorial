@@ -26,8 +26,11 @@
 using namespace sycl;
 using namespace std::chrono;
 
+#if defined(FPGA_EMULATOR)
 #define FILE_NAME  "kafka-words.txt"
-
+#else
+#define FILE_NAME  "kafka-words-v2.txt"
+#endif
 // data types and constants
 // NOTE: this tutorial assumes you are using a sycl::vec datatype. Therefore, 
 // 'Type' can only be changed to a different vector datatype (e.g. int16,
@@ -78,11 +81,11 @@ int main(int argc, char* argv[]) {
 #if defined(FPGA_EMULATOR)
   size_t chunks = 1 << 4;         // 16
   size_t chunk_count = 1 << 8;    // 256
-  size_t iterations = 2;
+  size_t iterations = 1;
 #else
-  size_t chunks = 1 << 9;         // 512
-  size_t chunk_count = 1 << 15;   // 32768
-  size_t iterations = 5;
+  size_t chunks = 1 << 6;         // 64
+  size_t chunk_count = 1 << 9;   // 512
+  size_t iterations = 1;
 #endif
 
 
@@ -244,21 +247,25 @@ int main(int argc, char* argv[]) {
 
     // a lambda function to validate the results
     auto validate_results = [&] {
-      for (size_t i = 0; i < total_count; i++) {
-        auto comp = (in[i] == out[i]);
-        for (auto j = 0; j < comp.get_count(); j++) {
-          if (!comp[j]) {
+      for (size_t i = 0; i < 10; i++) { //} total_count; i++) {
+        unsigned int retval_device = cms_estimate(C, hashes, in[i]);
+        unsigned int item = cms_hashstr(in[i]);
+        auto comp = (true_count[item] == retval_device);
+        if (!comp) {
             std::cerr << "ERROR: Values do not match, "
-                      << "in[" << i << "][" << j << "]:" << in[i][j]
-                      << " != out[" << i << "]["<< j << "]:" << out[i][j]
-                      << "\n";
-            return false;
+                      << "in[" << i << "]:" << in[i]
+                      << " true_count=" << true_count[item] << "\t"<< "CM on device=" 
+                      << retval_device << "\n";
           }
-        }
+        //else 
       }
 
       return true;
     };
+
+  // initialize counter array
+  cms_init_C(C);
+  std::cout<<"iteration = "<< iterations<<std::endl;
 
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
@@ -272,7 +279,7 @@ int main(int argc, char* argv[]) {
     ////////////////////////////////////////////////////////////////////////////
 
     //FIXME DEBUG
-    //return 0;
+    return 0;
 
     ////////////////////////////////////////////////////////////////////////////
     // run the optimized (for latency) version that uses fast kernel relaunch
