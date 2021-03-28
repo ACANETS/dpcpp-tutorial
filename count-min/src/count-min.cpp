@@ -245,27 +245,49 @@ int main(int argc, char* argv[]) {
     }
     std::cout<<std::endl;
 
-    // a lambda function to validate the results
+    // a lambda function to validate the results (compare counters)
     auto validate_results = [&] {
-      for (size_t i = 0; i < 10; i++) { //} total_count; i++) {
+      auto mismatch = 0;
+      for (size_t i = 0; i < total_count; i++) {
         unsigned int retval_device = cms_estimate(C, hashes, in[i]);
         unsigned int item = cms_hashstr(in[i]);
         auto comp = (true_count[item] == retval_device);
         if (!comp) {
-            std::cerr << "ERROR: Values do not match, "
-                      << "in[" << i << "]:" << in[i]
-                      << " true_count=" << true_count[item] << "\t"<< "CM on device=" 
+            std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
+                      << "in[" << i << "]:\"" << in[i]
+                      << "\" | true_count=" << true_count[item] << "\t"<< "CM on device=" 
                       << retval_device << "\n";
-          }
+          mismatch ++;
+        }
         //else 
       }
-
+      std::cerr<< mismatch << " out of "<<total_count<<" mismatches\n";
       return true;
     };
 
-  // initialize counter array
-  cms_init_C(C);
-  std::cout<<"iteration = "<< iterations<<std::endl;
+
+    // a lambda function to validate the results (compare counters)
+    auto validate_results_top10 = [&] {
+      auto mismatch = 0;
+      // identify top 10 using CM sketch
+      Type top10[10];
+      for (size_t i = 0; i < total_count; i++) {
+        unsigned int retval_device = cms_estimate(C, hashes, in[i]);
+        unsigned int item = cms_hashstr(in[i]);
+        auto comp = (true_count[item] == retval_device);
+        if (!comp) {
+            std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
+                      << "in[" << i << "]:\"" << in[i]
+                      << "\" | true_count=" << true_count[item] << "\t"<< "CM on device=" 
+                      << retval_device << "\n";
+          mismatch ++;
+        }
+        //else 
+      }
+      std::cerr<< mismatch << " out of "<<total_count<<" mismatches\n";
+      return true;
+    };
+
 
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
@@ -278,8 +300,9 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
 
-    //FIXME DEBUG
-    return 0;
+    // initialize counter array
+    cms_init_C(C);
+    std::cout<<"iteration = "<< iterations<<std::endl;
 
     ////////////////////////////////////////////////////////////////////////////
     // run the optimized (for latency) version that uses fast kernel relaunch
@@ -609,11 +632,12 @@ void PrintPerformanceInfo(std::string print_prefix, size_t count,
   double input_size_megabytes = (sizeof(T) * count) * 1e-6;
 
   // compute the average latency and processing time
-  double iterations = latency_ms.size() - 1;
-  double avg_latency_ms = std::accumulate(latency_ms.begin() + 1,
+  double iterations = latency_ms.size();
+  std::cout<<"iterations = " << iterations <<"\n";
+  double avg_latency_ms = std::accumulate(latency_ms.begin(),
                                           latency_ms.end(),
                                           0.0) / iterations;
-  double avg_processing_time_ms = std::accumulate(process_time_ms.begin() + 1,
+  double avg_processing_time_ms = std::accumulate(process_time_ms.begin(),
                                                   process_time_ms.end(),
                                                   0.0) / iterations;
 

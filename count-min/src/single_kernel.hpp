@@ -43,7 +43,7 @@ event SubmitSingleWorker(queue &q, T *in_ptr, T *out_ptr, size_t count,
       }
 
       for (size_t i = 0; i < count; i++) {
-        // do a simple copy - more complex computation can go here
+        // get the data
         T data = *(in + i);
         // update hash tables in CM sketch
         cms_update(local_mem_C, local_mem_hashes, data, 1);
