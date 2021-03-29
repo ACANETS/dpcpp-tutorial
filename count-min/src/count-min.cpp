@@ -11,6 +11,7 @@
 #include <utility>
 #include <fstream>
 #include <map>
+#include <set>
 
 #include <CL/sycl.hpp>
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
@@ -73,8 +74,18 @@ std::ostream& operator<<(std::ostream& os, const char16 &input)
     return os;
 }
 
-  int C[NUM_D][NUM_W];
-  int hashes[NUM_D][2];
+
+template<typename T>
+void print_queue(T q, class CountMinSketch &cms) {
+  while(!q.empty()) {
+    std::cout<<q.top() << " " << cms.estimate(q.top()) << std::endl;
+    q.pop();
+  }
+  std::cout<<"\n";
+}
+
+int C[NUM_D][NUM_W];
+int hashes[NUM_D][2];
 
 int main(int argc, char* argv[]) {
   // default values
@@ -220,20 +231,49 @@ int main(int argc, char* argv[]) {
       return Type(c);});
     //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
 
+    auto cmp_hash = [](Type left, Type right) {
+      unsigned int left_hash = cms_hashstr(left);
+      unsigned int right_hash = cms_hashstr(right);
+      return (left_hash < right_hash);
+    };
+    // init set of data hash to identify unique words
+    std::set<Type, decltype(cmp_hash)> unique_words(cmp_hash);
+
     // do brute force search and count
+    // init map 
     std::map<unsigned int, int> true_count;
     for (size_t i = 0; i < total_count; i++) {
       // init map for brute force search count
       unsigned int item = cms_hashstr(in[i]);
       true_count[item] = 0;
+      // populate set of unique words;
+      unique_words.insert(in[i]);
     }
     // run Count-Min sketch on host
     for (size_t i = 0; i < total_count; i++) {
       cm.update(in[i], 1);
-      // brute force search count
+      // we take advantage of this loop to 
+      // do brute force count
       unsigned int item = cms_hashstr(in[i]);
       true_count[item] ++;
     }
+      
+    // use priority queue to search for top K items
+    // 
+    // lambda to compare elements that are in hostside CMS
+    // this is needed for creating priority_queue of "Type"
+    auto cmp_host_cms = [&](Type left, Type right) {
+      unsigned int left_count = cm.estimate(left);
+      unsigned int right_count = cm.estimate(right);
+      return (left_count < right_count);
+    };
+    std::priority_queue<Type, std::vector<Type>, decltype(cmp_host_cms)> pq1(cmp_host_cms);
+    for (std::set<Type, decltype(cmp_hash)>::iterator it=unique_words.begin(); 
+      it!=unique_words.end(); ++it) {
+      pq1.push(*it);
+    }
+    std::cout<<"Total # of Unique Words = "<< unique_words.size() << "\n";
+    print_queue(pq1, cm);
 
     // do estimate using CMS on host and compare with true count
     std::cout<<"On Host Only:\n";
@@ -271,6 +311,8 @@ int main(int argc, char* argv[]) {
       auto mismatch = 0;
       // identify top 10 using CM sketch
       Type top10[10];
+
+      
       for (size_t i = 0; i < total_count; i++) {
         unsigned int retval_device = cms_estimate(C, hashes, in[i]);
         unsigned int item = cms_hashstr(in[i]);
