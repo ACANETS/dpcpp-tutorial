@@ -1,8 +1,8 @@
 CXX := dpcpp
 CXXFLAGS = -O2 -g -std=c++17
-CXXINC = -I../image-conv/src/Utils
+CXXINC = -Isrc/Utils -Isrc/PipeArray
 
-SRC := src/sf-filter.cpp ../image-conv/src/Utils/bmp-utils.c ../image-conv/src/Utils/gold.c ../image-conv/src/Utils/utils.c
+SRC := src/sf-filter.cpp src/Utils/bmp-utils.c src/Utils/gold.c src/Utils/utils.c
 
 .PHONY: fpga_emu run_emu clean
 
@@ -11,6 +11,11 @@ fpga_emu: sf-filter.fpga_emu
 hw: sf-filter.fpga
 
 report: sf-filter_report.a
+
+profile:  sf-filter.fpga_profile
+
+sf-filter.fpga_profile: $(SRC)
+	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -Xshardware -Xsprofile -Xsprofile-shared-counters -DFPGA=1
 
 sf-filter.fpga_emu: $(SRC)
 	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1

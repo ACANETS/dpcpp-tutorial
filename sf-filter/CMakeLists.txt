@@ -16,3 +16,4 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Images/ DESTINATION ${CMAKE_CURRENT_BINARY
 
 add_subdirectory (src)
 add_subdirectory (src/Utils)
+add_subdirectory (src/PipeArray)

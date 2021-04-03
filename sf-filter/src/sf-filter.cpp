@@ -24,7 +24,6 @@ using namespace sycl;
 
 // pipe_array headers
 #include "pipe_array.hpp"
-#include "unroller.hpp"
 
 // Debug flag for print statements
 static const bool debug = true;
@@ -70,7 +69,7 @@ template <size_t producer_id> class ProducerKernel;
 class ConsumerKernel;
 
 template<size_t producer_id>
-void Producer(queue &q, float *image_in,
+double Producer(queue &q, float *image_in,
               float *filter_in, const size_t FilterWidth,
               const size_t ImageRows, const size_t ImageCols)
 {
@@ -85,7 +84,7 @@ void Producer(queue &q, float *image_in,
   //
   int halfFilterWidth = (int)FilterWidth/2;
 
-  auto e = q.submit([&](handler &h)
+  event e = q.submit([&](handler &h)
   {
     auto sourcePtr = image_in_buf.get_access<access::mode::read>(h);
     auto filterPtr = filter_buf.get_access<access::mode::read>(h);
@@ -136,9 +135,18 @@ void Producer(queue &q, float *image_in,
       }
     });
   });
+
+  //
+  // Get the elapsed kernel time, mostly just to see difference between
+  // single_task and parallel_for execution schema
+  //
+  double start_time_ns = e.get_profiling_info<info::event_profiling::command_start>();
+  double end_time_ns = e.get_profiling_info<info::event_profiling::command_end>();
+
+  return (end_time_ns - start_time_ns);
 }
 
-void Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t ImageCols)
+double Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t ImageCols)
 {
   std::cout << "Enqueuing consumer..." << std::endl;
 
@@ -147,7 +155,7 @@ void Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t I
   //
   buffer<float, 1> image_out_buf(image_out, range<1>(ImageRows * ImageCols));
 
-  auto e = q.submit([&](handler &h)
+  event e = q.submit([&](handler &h)
   {
     auto destPtr = image_out_buf.get_access<access::mode::write>(h);
 
@@ -174,6 +182,16 @@ void Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t I
       }
     });
   });
+
+  //
+  // Get the elapsed kernel time, mostly just to see difference between
+  // single_task and parallel_for execution schema
+  //
+  double start_time_ns = e.get_profiling_info<info::event_profiling::command_start>();
+  double end_time_ns = e.get_profiling_info<info::event_profiling::command_end>();
+
+  return (end_time_ns - start_time_ns);
+
 }
 
 // **************************************************************************************
@@ -257,7 +275,6 @@ void ImageConv(queue &q, float *image_in, float *image_out,
 
         }
       }
-
       //
       // Save off the new pixel value
       //
@@ -330,9 +347,17 @@ int main()
   vOutputImage = (float*) malloc(imageRows * imageCols * sizeof(float));
   outputImage = (float*) malloc(imageRows * imageCols * sizeof(float));
 
+  //
+  // Start the timer
+  //
+  dpc_common::TimeInterval exec_time;
+  double total_pipe_path_time_s = 0;
+
   try
   {
-    queue q(d_selector, dpc_common::exception_handler);
+    auto prop_list = property_list{property::queue::enable_profiling()};
+
+    queue q(d_selector, dpc_common::exception_handler, prop_list);
 
     //
     // Print device information used in the kernel
@@ -343,24 +368,34 @@ int main()
     //
     // Enqueue producers
     //
-    Producer<0>(q, hInputImage, horizontalSobelFilter, sobelFilterWidth, imageRows, imageCols);
-    Producer<1>(q, hInputImage, verticalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    double start_time = exec_time.Elapsed();
+
+    auto horzKernelTime = Producer<0>(q, hInputImage, horizontalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    auto vertKernelTime = Producer<1>(q, hInputImage, verticalSobelFilter, sobelFilterWidth, imageRows, imageCols);
 
     //
     // Enqueue Consumer
     //
-    Consumer(q, outputImage, imageRows, imageCols);
+    auto consKernelTime = Consumer(q, outputImage, imageRows, imageCols);
 
+    //
+    // Stop the timer and report execution times
+    //
+    total_pipe_path_time_s = exec_time.Elapsed() - start_time;
+
+    std::cout << "Horizontal kernel compute time:  " << horzKernelTime * 1e-6 << " ms." << std::endl;
+    std::cout << "Vertical kernel compute time:  " << vertKernelTime * 1e-6 << " ms." << std::endl;
+    std::cout << "Consumer kernel compute time:  " << consKernelTime * 1e-6 << " ms." << std::endl;
+    std::cout << "Total compute time:  " << total_pipe_path_time_s * 1e3 << " ms." << std::endl;
 
     //
     // Run the horizontal line filter, then the vertical line filter
     //
-    /*filter = horizontalSobelFilter;
+    filter = horizontalSobelFilter;
     ImageConv(q, hInputImage, hOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
 
     filter = verticalSobelFilter;
     ImageConv(q, hInputImage, vOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
-    */
 
   }
   catch(const std::exception& e)
@@ -373,7 +408,7 @@ int main()
   //
   // No errors runing kernel, so combine the two filtered images
   //
-  /*for (int r = 0; r < imageRows; r++)
+  for (int r = 0; r < imageRows; r++)
   {
     for (int c = 0; c < imageCols; c++)
     {
@@ -381,7 +416,14 @@ int main()
         std::pow(hOutputImage[r * imageCols + c], 2) +
          std::pow(vOutputImage[r * imageCols + c], 2));
     }
-  }*/
+  }
+
+
+  //
+  // Stop the timer and report execution times
+  //
+  double total_img_conv_time_s = exec_time.Elapsed() - total_pipe_path_time_s;
+  std::cout << "Total Image_Conv compute time:  " << total_img_conv_time_s * 1e3 << " ms." << std::endl;
 
   //
   // Save the output bmp
