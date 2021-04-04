@@ -291,13 +291,16 @@ int main(int argc, char* argv[]) {
       unsigned int item = cms_hashstr(in[i]);
       true_count[item] ++;
     }
-      
+    std::cout<<"Total count in CM = "<<cm.totalcount()<<std::endl;
+
+    //std::cout<<"matter "<<cm.estimate("matter") << std::endl;
+
     // use priority queue to search for top K items
     // 
     // 
     // lambda to compare elements using true count
     // this is needed for creating priority_queue of "Type"
-    auto cmp_truecount = [&](Type left, Type right) {
+    auto cmp_truecount = [&true_count](Type left, Type right) {
       unsigned int left_hash = cms_hashstr(left);
       unsigned int left_count = true_count[left_hash];
       unsigned int right_hash = cms_hashstr(right);
@@ -314,7 +317,8 @@ int main(int argc, char* argv[]) {
 
     // lambda to compare elements that are in hostside CMS
     // this is needed for creating priority_queue of "Type"
-    auto cmp_host_cms = [&](Type left, Type right) {
+    auto cmp_host_cms = [&cm](Type left, Type right) {
+      //std::cout<<"in cmp_host_cms left\n";
       unsigned int left_count = cm.estimate(left);
       unsigned int right_count = cm.estimate(right);
       return (left_count < right_count);

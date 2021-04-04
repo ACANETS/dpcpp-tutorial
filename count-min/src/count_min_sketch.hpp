@@ -53,7 +53,7 @@ public:
   CountMinSketch(float eps, float gamma);
   
   // update item (int) by count c
-  void update(int item, int c);
+  void update(unsigned int item, int c);
   // update item (string) by count c
   void update(const char *item, int c);
 
@@ -61,7 +61,7 @@ public:
   void update(sycl::char16 item, int c);
 
   // estimate count of item i and return count
-  unsigned int estimate(int item);
+  unsigned int estimate(unsigned int item);
   unsigned int estimate(const char *item);
   unsigned int estimate(sycl::char16 item);
 
@@ -87,8 +87,8 @@ public:
 
 #define EPS 0.0001
 #define GAMMA 0.001
-#define NUM_W 32768  //round up from 27183
-#define NUM_D 8 //round up from 7
+#define NUM_W 65536 //32768  //round up from 27183
+#define NUM_D 16 //8 //round up from 7
 
 extern int cms_total;
 extern int C[NUM_D][NUM_W];

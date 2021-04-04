@@ -57,7 +57,7 @@ void cms_init_hashes(int hashes[NUM_D][2], CountMinSketch &cm)
 }
 // generates a hash value for a char16
 unsigned int cms_hashstr(sycl::char16 str) {
-  unsigned long hash = 5381;
+  unsigned int hash = 6211; //5381;
   int c=0;
   while (c < 16) {
     hash = ((hash << 5) + hash) + str[c]; /* hash * 33 + c */
@@ -158,7 +158,7 @@ unsigned int CountMinSketch::totalcount() {
 }
 
 // countMinSketch update item count (int)
-void CountMinSketch::update(int item, int c) {
+void CountMinSketch::update(unsigned int item, int c) {
   total = total + c;
   unsigned int hashval = 0;
   for (unsigned int j = 0; j < d; j++) {
@@ -168,19 +168,23 @@ void CountMinSketch::update(int item, int c) {
 }
 
 // countMinSketch update item count (string)
+/*
 void CountMinSketch::update(const char *str, int c) {
   int hashval = hashstr(str);
   update(hashval, c);
 }
+*/
 
 // countMinSketch update item count (string)
 void CountMinSketch::update(sycl::char16 str, int c) {
-  int hashval = hashstr(str);
+  unsigned int hashval = hashstr(str);
+  if(str[0] == 'm' && str[1] == 'a' && str[2] == 't' && str[3] == 't' && str[4] == 'e' && str[5] == 'r')
+    std::cout<<"++ CM update: +"<<c<<" hash value="<<hashval << "\n";
   update(hashval, c);
 }
 
 // CountMinSketch estimate item count (int)
-unsigned int CountMinSketch::estimate(int item) {
+unsigned int CountMinSketch::estimate(unsigned int item) {
   int minval = numeric_limits<int>::max();
   unsigned int hashval = 0;
   for (unsigned int j = 0; j < d; j++) {
@@ -191,14 +195,18 @@ unsigned int CountMinSketch::estimate(int item) {
 }
 
 // CountMinSketch estimate item count (string)
+/*
 unsigned int CountMinSketch::estimate(const char *str) {
   int hashval = hashstr(str);
   return estimate(hashval);
 }
+*/
 
 // CountMinSketch estimate item count (string)
 unsigned int CountMinSketch::estimate(sycl::char16 str) {
   int hashval = hashstr(str);
+  if(str[0] == 'm' && str[1] == 'a' && str[2] == 't' && str[3] == 't' && str[4] == 'e' && str[5] == 'r')
+    std::cout<<"************ matter hash="<<hashval<<" "<<estimate(hashval)<<"\n";
   return estimate(hashval);
 }
 
@@ -210,14 +218,16 @@ void CountMinSketch::genajbj(int** hashes, int i) {
 
 // generates a hash value for a sting
 // same as djb2 hash function
+/*
 unsigned int CountMinSketch::hashstr(const char *str) {
   unsigned long hash = 5381;
   int c;
   while ((c = *str++)) {
-    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    hash = ((hash << 5) + hash) + c; // hash * 33 + c 
   }
   return hash;
 }
+*/
 
 // generates a hash value for a char16
 unsigned int CountMinSketch::hashstr(sycl::char16 str) {
