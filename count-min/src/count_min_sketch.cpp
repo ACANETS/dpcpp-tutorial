@@ -221,12 +221,14 @@ unsigned int CountMinSketch::hashstr(const char *str) {
 
 // generates a hash value for a char16
 unsigned int CountMinSketch::hashstr(sycl::char16 str) {
-  unsigned long hash = 5381;
-  int c=0;
-  while (c < 16) {
-    hash = ((hash << 5) + hash) + str[c]; /* hash * 33 + c */
-    c++;
-  }
-  return hash;
+//  unsigned long hash = 5381;
+//  int c=0;
+//  while (c < 16) {
+//    hash = ((hash << 5) + hash) + str[c]; /* hash * 33 + c */
+//    c++;
+//  }
+//  
+//  return hash;
+  return cms_hashstr(str);
 }
 
