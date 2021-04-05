@@ -30,7 +30,7 @@ using namespace std::chrono;
 #if defined(FPGA_EMULATOR)
 #define FILE_NAME  "kafka-words.txt"
 #else
-#define FILE_NAME  "kafka-words-v2.txt"
+#define FILE_NAME  "kafka-words-x2.txt"
 #endif
 // data types and constants
 // NOTE: this tutorial assumes you are using a sycl::vec datatype. Therefore, 
@@ -257,11 +257,17 @@ int main(int argc, char* argv[]) {
     std::generate_n(in, total_count, [&infile] { 
       std::string a;
       infile>>a; 
-      std::vector<char> b(a.begin(), a.end());
+      auto alen=a.length();
+//      std::vector<char> b(a.begin(), a.end());
+//      std::cout<<"sizeof(b)="<<sizeof(b)<<std::endl;
       Type c;
       for(auto k=0; k < 16; k++)
-        c[k] = b[k];
-      return Type(c);});
+        if(k < alen)
+          c[k] = a[k];
+        else
+          c[k]= 0;
+      std::cout<<c<<" ";
+      return c;});
     //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
 
     auto cmp_hash = [](Type left, Type right) {
@@ -339,6 +345,7 @@ int main(int argc, char* argv[]) {
     print_top10_hostCMS(pq1, cm);
     std::cout<<std::endl;
 
+#if 0
     // a lambda function to validate the results (compare counters)
     auto validate_results = [&] {
       auto mismatch = 0;
@@ -360,13 +367,14 @@ int main(int argc, char* argv[]) {
     };
 
 
+
+      /*
     // a lambda function to validate the results (compare counters)
     auto validate_results_top10 = [&] {
       auto mismatch = 0;
       // identify top 10 using CM sketch
       Type top10[10];
 
-      /*
       for (size_t i = 0; i < total_count; i++) {
         unsigned int retval_device = cms_estimate(C, hashes, in[i]);
         unsigned int item = cms_hashstr(in[i]);
@@ -380,10 +388,10 @@ int main(int argc, char* argv[]) {
         }
         //else 
       }
-      */
       std::cerr<< mismatch << " out of "<<total_count<<" mismatches\n";
       return true;
     };
+      */
 
 
     ////////////////////////////////////////////////////////////////////////////
@@ -414,7 +422,6 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
 
-#if 0
     ////////////////////////////////////////////////////////////////////////////
     // run the optimized (for latency) version with multiple kernels that uses
     // fast kernel relaunch by keeping at most 'inflight_kernels' in the SYCL
