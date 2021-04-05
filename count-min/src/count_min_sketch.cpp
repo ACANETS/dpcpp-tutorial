@@ -178,8 +178,6 @@ void CountMinSketch::update(const char *str, int c) {
 // countMinSketch update item count (string)
 void CountMinSketch::update(sycl::char16 str, int c) {
   unsigned int hashval = hashstr(str);
-  if(str[0] == 'm' && str[1] == 'a' && str[2] == 't' && str[3] == 't' && str[4] == 'e' && str[5] == 'r')
-    std::cout<<"++ CM update: +"<<c<<" hash value="<<hashval << "\n";
   update(hashval, c);
 }
 
@@ -205,8 +203,6 @@ unsigned int CountMinSketch::estimate(const char *str) {
 // CountMinSketch estimate item count (string)
 unsigned int CountMinSketch::estimate(sycl::char16 str) {
   int hashval = hashstr(str);
-  if(str[0] == 'm' && str[1] == 'a' && str[2] == 't' && str[3] == 't' && str[4] == 'e' && str[5] == 'r')
-    std::cout<<"************ matter hash="<<hashval<<" "<<estimate(hashval)<<"\n";
   return estimate(hashval);
 }
 
@@ -231,14 +227,6 @@ unsigned int CountMinSketch::hashstr(const char *str) {
 
 // generates a hash value for a char16
 unsigned int CountMinSketch::hashstr(sycl::char16 str) {
-//  unsigned long hash = 5381;
-//  int c=0;
-//  while (c < 16) {
-//    hash = ((hash << 5) + hash) + str[c]; /* hash * 33 + c */
-//    c++;
-//  }
-//  
-//  return hash;
   return cms_hashstr(str);
 }
 

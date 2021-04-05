@@ -86,14 +86,18 @@ void print_queue(T q, class CountMinSketch &cms) {
 }
 
 template<typename T>
-void print_top10_hostCMS(T q, class CountMinSketch &cms) {
+std::vector<Type> print_top10_hostCMS(T q, class CountMinSketch &cms) {
   auto i=0;
+  std::vector<Type> ret;
+  std::cout<<"Top10 using CMS on host\n";
   while(!q.empty() && i<10) {
     std::cout<<q.top() << " " << cms.estimate(q.top()) << std::endl;
+    ret.push_back(q.top());
     q.pop();
     i++;
   }
   std::cout<<"\n";
+  return ret;
 }
 
 template<typename T>
@@ -108,16 +112,19 @@ void print_top10_deviceCMS(T q) {
 }
 
 template<typename T>
-void print_top10_truecount(T q, std::map<unsigned int, int> &true_count) {
+std::vector<Type>  print_top10_truecount(T q, std::map<unsigned int, int> &true_count) {
   auto i=0;
+  std::vector<Type> ret;
   std::cout<<"Top10 True Count\n";
   while(!q.empty() && i<10) {
     unsigned int h = cms_hashstr(q.top());
     std::cout<<q.top() << " " << true_count[h] << std::endl;
+    ret.push_back(q.top());
     q.pop();
     i++;
   }
   std::cout<<"\n";
+  return ret;
 }
 
 int C[NUM_D][NUM_W];
@@ -260,17 +267,14 @@ int main(int argc, char* argv[]) {
       std::string a;
       infile>>a; 
       auto alen=a.length();
-//      std::vector<char> b(a.begin(), a.end());
-//      std::cout<<"sizeof(b)="<<sizeof(b)<<std::endl;
       Type c;
       for(auto k=0; k < 16; k++)
         if(k < alen)
           c[k] = a[k];
         else
           c[k]= 0;
-      std::cout<<c<<" ";
+      //std::cout<<c<<" ";
       return c;});
-    //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
 
     // init set of data hash to identify unique words
     std::vector<Type> unique_words;
@@ -284,9 +288,9 @@ int main(int argc, char* argv[]) {
       unsigned int item = cms_hashstr(in[i]);
       true_count[item] = 0;
       // populate set of unique words;
-      //std::string s = std::string(in[i]);
       if( !noted[item]) {
         unique_words.push_back(in[i]);
+        // mark presence in unique_words
         noted[item] = true;
       }
     }
@@ -303,8 +307,6 @@ int main(int argc, char* argv[]) {
     }
     std::cout<<"Total count in CM = "<<cm.totalcount()<<std::endl;
 
-    Type dd = {'m', 'a', 't', 't', 'e', 'r', 0,0,0,0,0,0,0,0,0,0};
-    std::cout<<"$$$$$$$ "<<cm.estimate(dd)<<std::endl;
 #if 0
     //DEBUG
     std::cout<<"DEBUG: Unique Words "<< unique_words.size() <<" \n";
@@ -333,7 +335,7 @@ int main(int argc, char* argv[]) {
     for (auto i=0; i<unique_words.size(); i++) {
       pq_truecount.push(unique_words[i]);
     }
-    print_top10_truecount(pq_truecount, true_count);
+    std::vector<Type> top10_truecount = print_top10_truecount(pq_truecount, true_count);
 
     // lambda to compare elements that are in hostside CMS
     // this is needed for creating priority_queue of "Type"
@@ -349,66 +351,55 @@ int main(int argc, char* argv[]) {
     }
     // query top 10 using CMS on host 
     std::cout<<"Top 10 (CMS On Host):\n";
-    print_top10_hostCMS(pq1, cm);
+    std::vector<Type> top10_onhost = print_top10_hostCMS(pq1, cm);
     std::cout<<std::endl;
 
+    // a lambda function to validate the results (compare counters)
+    auto validate_results_hostCMS = [&] {
+      auto mismatch = 0;
+      auto total_top = 10;
+      for (size_t i = 0; i < total_top; i++) {
+        auto comp = cms_hashstr(top10_onhost[i]) == cms_hashstr(top10_truecount[i]);
+        if (!comp) {
+            std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
+                      << "[" << i << "]: CM on host=" << top10_onhost[i]
+                      << "\" | true_count=" << top10_truecount[i] << "\n";
+          mismatch ++;
+        }
+      }
+      std::cerr<< mismatch << " out of top "<<total_top<<" mismatches\n";
+      return true;
+    };
+
+    passed &= validate_results_hostCMS();
+
+    std::cout << "\n";
 
 #if 0
-    // a lambda function to validate the results (compare counters)
-    auto validate_results = [&] {
-      auto mismatch = 0;
-      for (size_t i = 0; i < total_count; i++) {
-        unsigned int retval_device = cms_estimate(C, hashes, in[i]);
-        unsigned int item = cms_hashstr(in[i]);
-        auto comp = (true_count[item] == retval_device);
-        if (!comp) {
-            std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
-                      << "in[" << i << "]:\"" << in[i]
-                      << "\" | true_count=" << true_count[item] << "\t"<< "CM on device=" 
-                      << retval_device << "\n";
-          mismatch ++;
-        }
-        //else 
-      }
-      std::cerr<< mismatch << " out of "<<total_count<<" mismatches\n";
-      return true;
-    };
-
-
-
-      /*
-    // a lambda function to validate the results (compare counters)
-    auto validate_results_top10 = [&] {
-      auto mismatch = 0;
-      // identify top 10 using CM sketch
-      Type top10[10];
-
-      for (size_t i = 0; i < total_count; i++) {
-        unsigned int retval_device = cms_estimate(C, hashes, in[i]);
-        unsigned int item = cms_hashstr(in[i]);
-        auto comp = (true_count[item] == retval_device);
-        if (!comp) {
-            std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
-                      << "in[" << i << "]:\"" << in[i]
-                      << "\" | true_count=" << true_count[item] << "\t"<< "CM on device=" 
-                      << retval_device << "\n";
-          mismatch ++;
-        }
-        //else 
-      }
-      std::cerr<< mismatch << " out of "<<total_count<<" mismatches\n";
-      return true;
-    };
-      */
-
-
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
     std::cout << "Running the basic offload kernel\n";
     DoWorkOffload(q, in, out, total_count, iterations, C_buf, hashes_buf);
 
+    // a lambda function to validate the results (compare counters)
+    auto validate_results_deviceCMS = [&] {
+      auto mismatch = 0;
+      auto total_top = 10;
+      for (size_t i = 0; i < total_top; i++) {
+        auto comp = cms_hashstr(top10_onhost[i]) == cms_hashstr(top10_truecount[i]);
+        if (!comp) {
+            std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
+                      << "[" << i << "]: CM on host=" << top10_onhost[i]
+                      << "\" | true_count=" << top10_truecount[i] << "\n";
+          mismatch ++;
+        }
+      }
+      std::cerr<< mismatch << " out of top "<<total_top<<" mismatches\n";
+      return true;
+    };
+
     // validate the results using the lambda
-    //passed &= validate_results();
+    passed &= validate_results();
 
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
