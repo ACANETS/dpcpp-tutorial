@@ -286,6 +286,8 @@ int main(int argc, char* argv[]) {
       // populate set of unique words;
       unique_words.insert(in[i]);
     }
+    std::cout<<"Total # of Unique Words = "<< unique_words.size() << "\n";
+
     // run Count-Min sketch on host
     // also collect true_count stats
     for (size_t i = 0; i < total_count; i++) {
@@ -316,7 +318,6 @@ int main(int argc, char* argv[]) {
       it!=unique_words.end(); ++it) {
       pq_truecount.push(*it);
     }
-    std::cout<<"Total # of Unique Words = "<< unique_words.size() << "\n";
     print_top10_truecount(pq_truecount, true_count);
 
     // lambda to compare elements that are in hostside CMS
