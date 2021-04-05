@@ -265,9 +265,13 @@ int main(int argc, char* argv[]) {
     //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
 
     auto cmp_hash = [](Type left, Type right) {
-      unsigned int left_hash = cms_hashstr(left);
-      unsigned int right_hash = cms_hashstr(right);
-      return (left_hash < right_hash);
+//      unsigned int left_hash = cms_hashstr(left);
+//      unsigned int right_hash = cms_hashstr(right);
+//      return (left_hash < right_hash);
+      for(auto i=0; i < 16; i++)
+        if(left[i] < right[i])
+          return true;
+      return false;  
     };
     // init set of data hash to identify unique words
     std::set<Type, decltype(cmp_hash)> unique_words(cmp_hash);
