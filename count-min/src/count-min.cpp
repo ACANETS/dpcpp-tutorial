@@ -69,6 +69,7 @@ std::ostream& operator<<(std::ostream& os, const char16 &input)
     //}
     for (auto it = 0; it < 16; it++)
     {
+      if(input[it]!=0)
         std::cout << input[it];
     }    
     return os;
@@ -109,6 +110,7 @@ void print_top10_deviceCMS(T q) {
 template<typename T>
 void print_top10_truecount(T q, std::map<unsigned int, int> &true_count) {
   auto i=0;
+  std::cout<<"Top10 True Count\n";
   while(!q.empty() && i<10) {
     unsigned int h = cms_hashstr(q.top());
     std::cout<<q.top() << " " << true_count[h] << std::endl;
@@ -270,17 +272,9 @@ int main(int argc, char* argv[]) {
       return c;});
     //std::cout<<in[0]<< "**" << in[1] << "**" << std::endl;
 
-    auto cmp_hash = [](Type left, Type right) {
-//      unsigned int left_hash = cms_hashstr(left);
-//      unsigned int right_hash = cms_hashstr(right);
-//      return (left_hash < right_hash);
-      for(auto i=0; i < 16; i++)
-        if(left[i] < right[i])
-          return true;
-      return false;  
-    };
     // init set of data hash to identify unique words
-    std::set<Type, decltype(cmp_hash)> unique_words(cmp_hash);
+    std::vector<Type> unique_words;
+    std::map<unsigned int, bool>noted;
 
     // do brute force search and count
     // init map 
@@ -290,9 +284,13 @@ int main(int argc, char* argv[]) {
       unsigned int item = cms_hashstr(in[i]);
       true_count[item] = 0;
       // populate set of unique words;
-      unique_words.insert(in[i]);
+      //std::string s = std::string(in[i]);
+      if( !noted[item]) {
+        unique_words.push_back(in[i]);
+        noted[item] = true;
+      }
     }
-    std::cout<<"Total # of Unique Words = "<< unique_words.size() << "\n";
+    std::cout<<"\nTotal # of Unique Words = "<< unique_words.size() << "\n";
 
     // run Count-Min sketch on host
     // also collect true_count stats
@@ -305,7 +303,17 @@ int main(int argc, char* argv[]) {
     }
     std::cout<<"Total count in CM = "<<cm.totalcount()<<std::endl;
 
-    //std::cout<<"matter "<<cm.estimate("matter") << std::endl;
+#if 0
+    //DEBUG
+    std::cout<<"DEBUG: Unique Words "<< unique_words.size() <<" \n";
+    auto uw=0;
+    for (auto i=0; i < unique_words.size(); i++) {
+      unsigned int item = cms_hashstr(unique_words[i]);
+      std::cout<<uw<<" "<<unique_words[i]<<" "<<true_count[item]<<"\n";;
+      uw++;
+    }
+    std::cout<<"\n---------------\n";
+#endif
 
     // use priority queue to search for top K items
     // 
@@ -320,9 +328,8 @@ int main(int argc, char* argv[]) {
       return (left_count < right_count);
     };
     std::priority_queue<Type, std::vector<Type>, decltype(cmp_truecount)> pq_truecount(cmp_truecount);
-    for (std::set<Type, decltype(cmp_hash)>::iterator it=unique_words.begin(); 
-      it!=unique_words.end(); ++it) {
-      pq_truecount.push(*it);
+    for (auto i=0; i<unique_words.size(); i++) {
+      pq_truecount.push(unique_words[i]);
     }
     print_top10_truecount(pq_truecount, true_count);
 
@@ -335,15 +342,14 @@ int main(int argc, char* argv[]) {
       return (left_count < right_count);
     };
     std::priority_queue<Type, std::vector<Type>, decltype(cmp_host_cms)> pq1(cmp_host_cms);
-    for (std::set<Type, decltype(cmp_hash)>::iterator it=unique_words.begin(); 
-      it!=unique_words.end(); ++it) {
-        //std::cout<<*it<<" "<<cm.estimate(*it)<<"\n";
-        pq1.push(*it);
+    for (auto i=0; i<unique_words.size(); i++) {
+        pq1.push(unique_words[i]);
     }
     // query top 10 using CMS on host 
     std::cout<<"Top 10 (CMS On Host):\n";
     print_top10_hostCMS(pq1, cm);
     std::cout<<std::endl;
+
 
 #if 0
     // a lambda function to validate the results (compare counters)
