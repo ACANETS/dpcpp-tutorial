@@ -101,14 +101,18 @@ std::vector<Type> print_top10_hostCMS(T q, class CountMinSketch &cms) {
 }
 
 template<typename T>
-void print_top10_deviceCMS(T q) {
+std::vector<Type> print_top10_deviceCMS(T q, 
+   int C[NUM_D][NUM_W],  int hashes[NUM_D][2]) {
   auto i=0;
+  std::vector<Type> ret;
   while(!q.empty() && i<10) {
-    std::cout<<q.top() << " " << cms_estimate(q.top()) << std::endl;
+    std::cout<<q.top() << " " << cms_estimate(C, hashes, q.top()) << std::endl;
+    ret.push_back(q.top());
     q.pop();
     i++;
   }
   std::cout<<"\n";
+  return ret;
 }
 
 template<typename T>
@@ -375,21 +379,37 @@ int main(int argc, char* argv[]) {
 
     std::cout << "\n";
 
-#if 0
     ////////////////////////////////////////////////////////////////////////////
     // run the offload version, which is NOT optimized for latency at all
     std::cout << "Running the basic offload kernel\n";
     DoWorkOffload(q, in, out, total_count, iterations, C_buf, hashes_buf);
+
+    // lambda to compare elements that are in device CMS
+    // this is needed for creating priority_queue of "Type"
+    auto cmp_device_cms = [&](Type left, Type right) {
+      //std::cout<<"in cmp_host_cms left\n";
+      unsigned int left_count = cms_estimate(C, hashes, left);
+      unsigned int right_count = cms_estimate(C, hashes, right);
+      return (left_count < right_count);
+    };
+    std::priority_queue<Type, std::vector<Type>, decltype(cmp_device_cms)> pq_dev_cms(cmp_device_cms);
+    for (auto i=0; i<unique_words.size(); i++) {
+        pq_dev_cms.push(unique_words[i]);
+    }
+    // query top 10 using CMS on host 
+    std::cout<<"Top 10 (CMS On Device):\n";
+    std::cout<<std::endl;
+    std::vector<Type> top10_ondevice = print_top10_deviceCMS(pq_dev_cms, C, hashes);
 
     // a lambda function to validate the results (compare counters)
     auto validate_results_deviceCMS = [&] {
       auto mismatch = 0;
       auto total_top = 10;
       for (size_t i = 0; i < total_top; i++) {
-        auto comp = cms_hashstr(top10_onhost[i]) == cms_hashstr(top10_truecount[i]);
+        auto comp = cms_hashstr(top10_ondevice[i]) == cms_hashstr(top10_truecount[i]);
         if (!comp) {
             std::cerr << "WARNING: Some values do not match due to approximation with CM sketch\n"
-                      << "[" << i << "]: CM on host=" << top10_onhost[i]
+                      << "[" << i << "]: CM on device=" << top10_ondevice[i]
                       << "\" | true_count=" << top10_truecount[i] << "\n";
           mismatch ++;
         }
@@ -399,10 +419,12 @@ int main(int argc, char* argv[]) {
     };
 
     // validate the results using the lambda
-    passed &= validate_results();
+    passed &= validate_results_deviceCMS();
 
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
+
+#if 0
 
     // initialize counter array
     cms_init_C(C);
@@ -416,7 +438,7 @@ int main(int argc, char* argv[]) {
                        inflight_kernels, iterations, C_buf, hashes_buf);
 
     // validate the results using the lambda
-    //passed &= validate_results();
+    passed &= validate_results();
 
     std::cout << "\n";
     ////////////////////////////////////////////////////////////////////////////
