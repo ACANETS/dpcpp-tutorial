@@ -59,7 +59,7 @@ void cms_init_hashes(int hashes[NUM_D][2], CountMinSketch &cm)
 unsigned int cms_hashstr(sycl::char16 str) {
   unsigned int hash = 6211; //5381;
   int c=0;
-  while (c < 16) {
+  while (c < 16 && str[c]) {
     hash = ((hash << 5) + hash) + str[c]; /* hash * 33 + c */
     c++;
   }

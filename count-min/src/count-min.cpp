@@ -303,6 +303,8 @@ int main(int argc, char* argv[]) {
     }
     std::cout<<"Total count in CM = "<<cm.totalcount()<<std::endl;
 
+    Type dd = {'m', 'a', 't', 't', 'e', 'r', 0,0,0,0,0,0,0,0,0,0};
+    std::cout<<"$$$$$$$ "<<cm.estimate(dd)<<std::endl;
 #if 0
     //DEBUG
     std::cout<<"DEBUG: Unique Words "<< unique_words.size() <<" \n";
