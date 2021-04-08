@@ -87,7 +87,7 @@ Matrix multiplication successfully completed on device.
 
 ## Recorded Lectures
 
-A series of recorded lectures are provided to introduce the important concepts about DPC++ programming for FPGAs. The videos can be found at the [DPC++ Tutorial playlist]() on Youtube and are linked individually below. 
+A series of recorded lectures are provided to introduce the important concepts about DPC++ programming for FPGAs. The videos can be found at the [DPC++ Tutorial playlist](https://youtube.com/playlist?list=PLZ9YeF_1_vF8RqYPNpHToklJcDRoVocU4) on Youtube and are linked individually below. 
 
 [Introduction to DPC++](https://youtu.be/F2DWVuJRvfM)
 
