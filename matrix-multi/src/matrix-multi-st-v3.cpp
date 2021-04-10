@@ -133,7 +133,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 
       // Report profiling info
       // step++;
-      std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+      std::cout <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
 
       total_kernel_time_ns += kernel_time_ns;
 #endif
