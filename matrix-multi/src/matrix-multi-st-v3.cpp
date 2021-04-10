@@ -80,7 +80,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     { 
       size_t row, col, m, n, k;
       float s = 0;
-      for(int i=0; i < a_rows*a_columns/(BLOCK_SIZE*BLOCK_SIZE); i++) {
+      for(int i=0; i < a_rows/BLOCK_SIZE; i++) {
         // the block indices of the block in A 
         auto block_row_a = i / (a_columns/BLOCK_SIZE);
         auto block_col_a = i % (a_columns/BLOCK_SIZE);
@@ -92,36 +92,47 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           // allocate local memory to hold a block of data from A, B and D
 	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
 	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
+	        //[[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_c[BLOCK_SIZE][BLOCK_SIZE];
 	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
 
-          // load blocks of data to local memory from global memory
           for (m=0; m < BLOCK_SIZE; m++)
             for ( n=0; n < BLOCK_SIZE; n++)
-            {
-              local_mem_a[m][n] = a[block_row_a*BLOCK_SIZE + m][block_col_a*BLOCK_SIZE + n];
-              local_mem_b[m][n] = b[block_row_b*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
-              local_mem_d[m][n] = d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
-            }  
-          // element-wise multiplication and accumulation
-          for (m=0; m < BLOCK_SIZE; m++)
-            for ( n=0; n < BLOCK_SIZE; n++) {
-              s = 0;
-	            #pragma unroll
-              for (k=0; k < BLOCK_SIZE; k++)
-                s += local_mem_a[m][k] * local_mem_b[k][n]; 
-              local_mem_d[m][n] += s;
-            }
+              {
+                local_mem_d[m][n] = c[i*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
+              } 
 
-          // write d back to global memory
+          for(int k=0; k<a_columns/BLOCK_SIZE; k++) {
+            // load blocks of data to local memory from global memory
+            for (m=0; m < BLOCK_SIZE; m++)
+              for ( n=0; n < BLOCK_SIZE; n++)
+              {
+                local_mem_a[m][n] = a[i*BLOCK_SIZE + m][k*BLOCK_SIZE + n];
+                local_mem_b[m][n] = b[k*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
+
+              }   
+            // element-wise multiplication and accumulation
+            for (m=0; m < BLOCK_SIZE; m++)
+              for ( n=0; n < BLOCK_SIZE; n++) {
+                s = 0;
+	              #pragma unroll
+                for (int p=0; p < BLOCK_SIZE; p++)
+                  s += local_mem_a[m][p] * local_mem_b[p][n]; 
+                local_mem_d[m][n] += s;
+              }
+          }
+          
+          // write D back to global memory
           for (m=0; m < BLOCK_SIZE; m++)
-            for ( n=0; n < BLOCK_SIZE; n++)
-                d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n];
+            for ( n=0; n < BLOCK_SIZE; n++) 
+            {
+              d[i*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n];
+            }
         } // for j
       } // for i
       // add C to D
-      for (m=0; m < a_rows; m++)
-        for ( n=0; n < b_columns; n++)
-          d[m][n] += c[m][n];
+//      for (m=0; m < a_rows; m++)
+//        for ( n=0; n < b_columns; n++)
+//          d[m][n] += c[m][n];
     }); // h
   }); // event e
 #if FPGA || FPGA_PROFILE
@@ -225,7 +236,7 @@ int main() {
   float(*C)[b_columns] = new float[a_rows][b_columns];
   // Intialize values
   for (int i = 0; i < a_rows; i++)
-    for (int j = 0; j < b_columns; j++) C[i][j] = 4.0;
+    for (int j = 0; j < b_columns; j++) C[i][j] = 3.0;
 
   float(*sum_sequential)[b_columns] = new float[a_rows][b_columns];
   float(*sum_stv3)[b_columns] = new float[a_rows][b_columns];
