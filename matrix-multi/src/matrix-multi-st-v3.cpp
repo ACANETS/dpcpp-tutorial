@@ -69,6 +69,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     // read/write. The accessor is a mean to access the memory in the buffer.
     auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
     auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto c = c_buf.get_access<access::mode::read, access::target::global_buffer>(h);
     auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
       
 
@@ -88,7 +89,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         auto block_row_b = block_col_a;
         for(int j=0; j<b_columns/BLOCK_SIZE; j++)
         { 
-          // allocate local memory to hold a block of data from A, B
+          // allocate local memory to hold a block of data from A, B and D
 	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
 	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
 	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
@@ -108,22 +109,19 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 	            #pragma unroll
               for (k=0; k < BLOCK_SIZE; k++)
                 s += local_mem_a[m][k] * local_mem_b[k][n]; 
-              // add to Matrix D
-              // the corresponding row and col in D
-              row = block_row_a * BLOCK_SIZE + m;
-              col = j * BLOCK_SIZE + n;
-              //d[row][col] += s;
               local_mem_d[m][n] += s;
             }
 
           // write d back to global memory
           for (m=0; m < BLOCK_SIZE; m++)
             for ( n=0; n < BLOCK_SIZE; n++)
-            {
-                d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n] ;
-            }  
+                d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n];
         } // for j
       } // for i
+      // add C to D
+      for (m=0; m < a_rows; m++)
+        for ( n=0; n < b_columns; n++)
+          d[m][n] += c[m][n];
     }); // h
   }); // event e
 #if FPGA || FPGA_PROFILE
@@ -135,11 +133,12 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 
       // Report profiling info
       // step++;
-      //std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+      std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
 
       total_kernel_time_ns += kernel_time_ns;
 #endif
 
+#if 0
   //
   e = q.submit([&](handler &h) {
     auto c = c_buf.get_access<access::mode::read, access::target::global_buffer>(h);
@@ -155,6 +154,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           d[m][n] += c[m][n];
     });
   }); // event e
+
 #if FPGA || FPGA_PROFILE
   // Query event e for kernel profiling information
   // (blocks until command groups associated with e complete)
@@ -170,6 +170,9 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
   // Report profiling info as it takes multiple steps
   std::cout << " Total Kernel compute time:  " << total_kernel_time_ns * 1e-6 << " ms\n";
 #endif
+
+#endif
+
 }
 
 
@@ -222,7 +225,7 @@ int main() {
   float(*C)[b_columns] = new float[a_rows][b_columns];
   // Intialize values
   for (int i = 0; i < a_rows; i++)
-    for (int j = 0; j < b_columns; j++) C[i][j] = 3.0;
+    for (int j = 0; j < b_columns; j++) C[i][j] = 4.0;
 
   float(*sum_sequential)[b_columns] = new float[a_rows][b_columns];
   float(*sum_stv3)[b_columns] = new float[a_rows][b_columns];
