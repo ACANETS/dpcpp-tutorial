@@ -32,14 +32,13 @@
 #include <array>
 #include <iostream>
 #include "dpc_common.hpp"
-#if FPGA || FPGA_EMULATOR
+#if FPGA || FPGA_EMULATOR || FPGA_PROFILE
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 #endif
 
 using namespace sycl;
 
 #define TEXT_FILE "kafka.txt"
-#define MAX_TEXT_LEN 20000000
 // number of keywords to search
 #define NUM_KEYWORDS 4
 
