@@ -44,7 +44,7 @@ using namespace sycl;
 #define NUM_KEYWORDS 4
 
 constexpr unsigned MAX_WG_SIZE = 16;
-constexpr unsigned CHAR_PER_WORKITEM = 32;
+constexpr unsigned CHAR_PER_WORKITEM = 1024;
 
 // templates for atomic ref operations
 template <typename T>
@@ -182,6 +182,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
 #endif
     step++;
   } // while
+
+  std::cout<<"total "<<step<<" steps completed.\n";
 
 #if FPGA || FPGA_PROFILE
     // Report profiling info as it takes multiple steps
