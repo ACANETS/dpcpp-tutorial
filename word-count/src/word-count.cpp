@@ -113,7 +113,9 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     h.parallel_for<class reduction_kernel>(
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
       [=] (nd_item<1> item) 
-      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), cl::reqd_work_group_size(1,1,MAX_WG_SIZE)]] 
+      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), 
+        cl::reqd_work_group_size(1,1,MAX_WG_SIZE),
+        intel::num_simd_work_items(MAX_WG_SIZE)]] 
       {
 
         // initialize local data
@@ -266,7 +268,7 @@ int main(int argc, char **argv) {
         dev.get_info<cl::sycl::info::device::max_compute_units>();
     std::cout << "num of compute units (reported)= " << num_cmpunit << std::endl;
 
-    num_cmpunit = 2 < num_cmpunit ? 2 : num_cmpunit;
+    num_cmpunit = 1 < num_cmpunit ? 1 : num_cmpunit;
     std::cout << "num of compute units (set as)= " << num_cmpunit << std::endl;
 
     auto wgroup_size = dev.get_info<info::device::max_work_group_size>();
