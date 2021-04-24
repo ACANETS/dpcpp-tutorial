@@ -12,7 +12,7 @@ Word Count example searches through a text file and count the occurences of give
 
 We use word-count to show how to design MapReduce programs. MapReduce is a widely used design pattern that can handle large problems and big data by mapping the original problem into partitions, on which the computation results are then collected and merged. In a typical MapReduce program, the first stage is a "Map" procedure which use hash or other filtering schemes to assign data to distributed servers. These servers run the tasks in parallel, and send their results to a "Reduce" procedure, which merges (e.g. sum up) such intermediate results to generate the final results. 
 
-In this example, we show the MapReduce design pattern is applied in word counting. Specifically for FPGA architectures, we show how to implement a reduce kernel in DPC++ and have it work with a customized map procedure. We also demonstrate the usage of atomic memory operations to eliminate race conditions and ensure the correctness of results.
+In this example, we show the MapReduce design pattern is applied in word counting. Specifically for FPGA architectures, we show how to implement a reduce kernel in DPC++ and have it work with a customized map procedure. We also demonstrate the usage of atomic memory operations to eliminate race conditions and ensure the correctness of the results.
 
 ## Key Implementation Details 
 
@@ -22,7 +22,9 @@ Word-count uses DPC++ a global memory buffer to store text file data and a local
 
 The Map procedure uses a fixed "workload" represented by "char_per_item" for each work-item. As a result, we partition the input text file into equal chunks of "text_size/char_per_item" bytes and assign each chunk to a work-item. As the FPGA architecture follows the preset workgroups and size of the workgroups, we can derive the number of times (called steps in the program) that we need to run the Map procedure. During each step, we create a total of "n_wgroups*wgroup_size" work-items.
 
-In the Reduction kernel, a work-item initializes the counters for the work-group, and reads its assigned chunk from the text file data. It scans through the chunk byte by byte and compares with the keywords simultaneously. If a keyword is matched, the corresponding counter in the local memory will be incremented atomically. At the end of reduction, the work-item will increment the global counters atomically.  
+In the Reduction kernel, a work-item initializes the counters for the work-group, and reads its assigned chunk from the text file data. It scans through the chunk byte by byte and compares with the keywords simultaneously. If a keyword is matched, the corresponding counter in the local memory will be incremented atomically. At the end of reduction, one of the work-items in a work-group will increment the global counters atomically.  
+
+In this FPGA oriented design, we have one compute unit which is typical for FPGA. Therefore one work-group is needed and specified. We have the option to set the size of the work-group, i.e. the number of work-items in the work-group. 
 
 ## License  
 This code sample is licensed under MIT license. 
@@ -44,6 +46,8 @@ This code sample is licensed under MIT license.
 * make report : generate static report on the FPGA resource utilization of the design.
 * make fpga : generate FPGA binary files for the designs. Will take a couple of hours.
 * make fpga_profile : generate FPGA binary to be used in run-time profiling. Will take a couple of hours.
+
+On Intel FPGA DevCloud, you can run a shell script job to launch the compilation of FPGA binary in batch mode on a node scheduled by the job scheduler, instead of logining into a specific FPGA node and then starting the compilation. This batch mode frees up the FPGA nodes from unnecessary occupancy in interactive mode. We included the job scripts (for compiling fpga_profile target) for both Arria 10 and Stratix 10, and you can modify the scripts to generate other targets.
 
 *A Makefile is still maintained in the directory, however, the usage of it is disencouraged.*
 
