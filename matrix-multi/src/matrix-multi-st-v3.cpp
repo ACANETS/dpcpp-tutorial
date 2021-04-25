@@ -62,71 +62,70 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
   buffer<float, 2> sum_buf(reinterpret_cast<float *>(matrix_d_parallel), num_items);
 
   auto step = 0;
-      // Submit a command group to the queue by a lambda function that contains the
-      // data access permission and device computation (kernel).
-      event e = q.submit([&](handler &h) {
-        // Create an accessor for each buffer with access permission: read, write or
-        // read/write. The accessor is a mean to access the memory in the buffer.
-        auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
-        auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
-        auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
+  // Submit a command group to the queue by a lambda function that contains the
+  // data access permission and device computation (kernel).
+  event e = q.submit([&](handler &h) {
+    // Create an accessor for each buffer with access permission: read, write or
+    // read/write. The accessor is a mean to access the memory in the buffer.
+    auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto b = b_buf.get_access<access::mode::read, access::target::global_buffer>(h);
+    auto d = sum_buf.get_access<access::mode::read_write, access::target::global_buffer>(h);
       
 
-        // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
-        // using the cl::sycl::single_task API:
-        //   single_task<typename kernel_lambda_name>([=](){});
-        h.single_task<MMstv3>([=]() [[intel::kernel_args_restrict]]
-          { 
-            size_t row, col, m, n, k;
-            float s = 0;
-  for(int i=0; i < a_rows*a_columns/(BLOCK_SIZE*BLOCK_SIZE); i++) {
-    // the block indices of the block in A 
-    auto block_row_a = i / (a_columns/BLOCK_SIZE);
-    auto block_col_a = i % (a_columns/BLOCK_SIZE);
-    // we need to calculate dot-product with all the blocks in B where
-    // the row number is equal to block_col_a
-    auto block_row_b = block_col_a;
-    for(int j=0; j<b_columns/BLOCK_SIZE; j++)
+    // A kernel that is executed on one thread using NDRange(1,1,1) is enqueued 
+    // using the cl::sycl::single_task API:
+    //   single_task<typename kernel_lambda_name>([=](){});
+    h.single_task<MMstv3>([=]() [[intel::kernel_args_restrict]]
     { 
-            // allocate local memory to hold a block of data from A, B
-	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
-	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
-	          [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
+      size_t row, col, m, n, k;
+      float s = 0;
+      for(int i=0; i < a_rows*a_columns/(BLOCK_SIZE*BLOCK_SIZE); i++) {
+        // the block indices of the block in A 
+        auto block_row_a = i / (a_columns/BLOCK_SIZE);
+        auto block_col_a = i % (a_columns/BLOCK_SIZE);
+        // we need to calculate dot-product with all the blocks in B where
+        // the row number is equal to block_col_a
+        auto block_row_b = block_col_a;
+        for(int j=0; j<b_columns/BLOCK_SIZE; j++)
+        { 
+          // allocate local memory to hold a block of data from A, B
+	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
+	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
+	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
 
-            // load blocks of data to local memory from global memory
-            for (m=0; m < BLOCK_SIZE; m++)
-              for ( n=0; n < BLOCK_SIZE; n++)
-              {
-                local_mem_a[m][n] = a[block_row_a*BLOCK_SIZE + m][block_col_a*BLOCK_SIZE + n];
-                local_mem_b[m][n] = b[block_row_b*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
-                local_mem_d[m][n] = d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
-              }  
-            // element-wise multiplication and accumulation
-            for (m=0; m < BLOCK_SIZE; m++)
-              for ( n=0; n < BLOCK_SIZE; n++) {
-                s = 0;
-	              #pragma unroll
-                for (k=0; k < BLOCK_SIZE; k++)
-                  s += local_mem_a[m][k] * local_mem_b[k][n]; 
-                // add to Matrix D
-                // the corresponding row and col in D
-                row = block_row_a * BLOCK_SIZE + m;
-                col = j * BLOCK_SIZE + n;
-                //d[row][col] += s;
-                local_mem_d[m][n] += s;
-              }
+          // load blocks of data to local memory from global memory
+          for (m=0; m < BLOCK_SIZE; m++)
+            for ( n=0; n < BLOCK_SIZE; n++)
+            {
+              local_mem_a[m][n] = a[block_row_a*BLOCK_SIZE + m][block_col_a*BLOCK_SIZE + n];
+              local_mem_b[m][n] = b[block_row_b*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
+              local_mem_d[m][n] = d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n];
+            }  
+          // element-wise multiplication and accumulation
+          for (m=0; m < BLOCK_SIZE; m++)
+            for ( n=0; n < BLOCK_SIZE; n++) {
+              s = 0;
+	            #pragma unroll
+              for (k=0; k < BLOCK_SIZE; k++)
+                s += local_mem_a[m][k] * local_mem_b[k][n]; 
+              // add to Matrix D
+              // the corresponding row and col in D
+              row = block_row_a * BLOCK_SIZE + m;
+              col = j * BLOCK_SIZE + n;
+              //d[row][col] += s;
+              local_mem_d[m][n] += s;
+            }
 
-            // write d back to global memory
-            for (m=0; m < BLOCK_SIZE; m++)
-              for ( n=0; n < BLOCK_SIZE; n++)
-              {
+          // write d back to global memory
+          for (m=0; m < BLOCK_SIZE; m++)
+            for ( n=0; n < BLOCK_SIZE; n++)
+            {
                 d[block_row_a*BLOCK_SIZE + m][j*BLOCK_SIZE + n] = local_mem_d[m][n] ;
-              }  
-
-    } // for j
-  } // for i
-          });
-      }); // event e
+            }  
+        } // for j
+      } // for i
+    }); // h
+  }); // event e
 #if FPGA || FPGA_PROFILE
       // Query event e for kernel profiling information
       // (blocks until command groups associated with e complete)

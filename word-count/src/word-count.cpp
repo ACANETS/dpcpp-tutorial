@@ -32,19 +32,18 @@
 #include <array>
 #include <iostream>
 #include "dpc_common.hpp"
-#if FPGA || FPGA_EMULATOR
+#if FPGA || FPGA_EMULATOR || FPGA_PROFILE
 #include <CL/sycl/INTEL/fpga_extensions.hpp>
 #endif
 
 using namespace sycl;
 
 #define TEXT_FILE "kafka.txt"
-#define MAX_TEXT_LEN 20000000
 // number of keywords to search
 #define NUM_KEYWORDS 4
 
 constexpr unsigned MAX_WG_SIZE = 16;
-constexpr unsigned CHAR_PER_WORKITEM = 32;
+constexpr unsigned CHAR_PER_WORKITEM = 1024;
 
 // templates for atomic ref operations
 template <typename T>
@@ -114,7 +113,9 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     h.parallel_for<class reduction_kernel>(
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
       [=] (nd_item<1> item) 
-      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), cl::reqd_work_group_size(1,1,MAX_WG_SIZE)]] 
+      [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), 
+        cl::reqd_work_group_size(1,1,MAX_WG_SIZE),
+        intel::num_simd_work_items(MAX_WG_SIZE)]] 
       {
 
         // initialize local data
@@ -182,6 +183,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
 #endif
     step++;
   } // while
+
+  std::cout<<"total "<<step<<" steps completed.\n";
 
 #if FPGA || FPGA_PROFILE
     // Report profiling info as it takes multiple steps
@@ -265,7 +268,7 @@ int main(int argc, char **argv) {
         dev.get_info<cl::sycl::info::device::max_compute_units>();
     std::cout << "num of compute units (reported)= " << num_cmpunit << std::endl;
 
-    num_cmpunit = 2 < num_cmpunit ? 2 : num_cmpunit;
+    num_cmpunit = 1 < num_cmpunit ? 1 : num_cmpunit;
     std::cout << "num of compute units (set as)= " << num_cmpunit << std::endl;
 
     auto wgroup_size = dev.get_info<info::device::max_work_group_size>();
