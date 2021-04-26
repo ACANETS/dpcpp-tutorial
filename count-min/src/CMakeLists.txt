@@ -5,6 +5,7 @@ set(TARGET_NAME count-min)
 set(EMULATOR_TARGET ${TARGET_NAME}.fpga_emu)
 set(FPGA_TARGET ${TARGET_NAME}.fpga)
 set(REPORTS_TARGET ${TARGET_NAME}_report)
+set(FPGA_PROFILE_TARGET ${TARGET_NAME}.fpga_profile)
 
 # USM is only supported on the PAC S10 board
 set(S10_PAC_USM_BOARD_NAME "intel_s10sx_pac:pac_s10_usm")
@@ -15,7 +16,8 @@ set(EMULATOR_LINK_FLAGS "-fintelfpga")
 set(HARDWARE_COMPILE_FLAGS "-fintelfpga -c")
 set(HARDWARE_LINK_FLAGS "-fintelfpga -Wall -Xshardware -Xsboard=${S10_PAC_USM_BOARD_NAME} -reuse-exe=${CMAKE_BINARY_DIR}/${FPGA_TARGET} ${USER_HARDWARE_FLAGS}")
 # use cmake -D USER_HARDWARE_FLAGS=<flags> to set extra flags for FPGA backend compilation
-
+set(HARDWARE_PROFILE_COMPILE_FLAGS "-fintelfpga -DFPGA_PROFILE")
+set(HARDWARE_PROFILE_LINK_FLAGS "-fintelfpga -Xshardware -Xsprofile -Xsboard=${SELECTED_BOARD} ${USER_HARDWARE_FLAGS}")
 
 # FPGA emulator
 if(WIN32)
@@ -65,3 +67,12 @@ else()
     add_custom_target(report DEPENDS ${REPORTS_TARGET})
 endif()
 
+# FPGA hardware profiling
+if(WIN32)
+    add_custom_target(fpga_profile COMMAND echo "An FPGA hardware target is not provided on Windows. See README for details.")
+else()
+    add_executable(${FPGA_PROFILE_TARGET} EXCLUDE_FROM_ALL ${SOURCE_FILE})
+    add_custom_target(fpga_profile DEPENDS ${FPGA_PROFILE_TARGET})
+    set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES COMPILE_FLAGS ${HARDWARE_PROFILE_COMPILE_FLAGS})
+    set_target_properties(${FPGA_PROFILE_TARGET} PROPERTIES LINK_FLAGS ${HARDWARE_PROFILE_LINK_FLAGS})
+endif()
