@@ -110,3 +110,12 @@ keyword have appears 110 times
 keyword from appears 116 times
 
 </pre>
+
+## Recorded Lectures
+
+A series of recorded lectures are provided to introduce the important concepts about this word-count example for FPGAs. The videos can be found at the [DPC++ Tutorial playlist](https://youtube.com/playlist?list=PLZ9YeF_1_vF8RqYPNpHToklJcDRoVocU4) on Youtube and are linked individually below. 
+
+[Introduction to MapReduce and Reduction Library](https://youtu.be/c0JPxu0BgZE)
+
+[Word-Count using MapReduce on FPGA](https://youtu.be/4HhQnUH0C6A)
+
