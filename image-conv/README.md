@@ -16,6 +16,8 @@ We use image-conv to show how to port existing application to data parallel prog
 
 This 'image-conv' example uses DPC++ buffers to store image data and a kernel function to perform convolution operation on the image data, and then writes the new image to a bmp file. The new image data are compared with those from a convolution function implemented on the host CPU as a golden standard.  A few utility functions, such as reading image data from bmp files or writing new image data to bmp files, are provided. 
 
+We include two implementations of image-conv kernels: buffer objects based and image objects based. Buffer objects are general memory objects that can be used to store arbitrary data structure, whereas image objects are opaque data types specifically for image data and related image processing operations.
+
 ## License  
 This code sample is licensed under MIT license. 
 
@@ -89,3 +91,12 @@ Output image saved as: cat-filtered.bmp
 Passed!
 Image Convolution successfully completed on device.
 </pre>
+
+## Recorded Lectures
+
+A series of recorded lectures are provided to introduce the important concepts in this image-conv example for FPGAs. The videos can be found at the [DPC++ Tutorial playlist](https://youtube.com/playlist?list=PLZ9YeF_1_vF8RqYPNpHToklJcDRoVocU4) on Youtube and are linked individually below. 
+
+[Introduction to Image Convolution](https://youtu.be/O_-sXNy23mw)
+
+[Image Objects in DPC++](https://youtu.be/Kb46lMLsve0)
+
