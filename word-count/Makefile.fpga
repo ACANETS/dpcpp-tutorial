@@ -1,0 +1,38 @@
+CXX := dpcpp
+CXXFLAGS = -O2 -g -std=c++17
+CXXINC =
+
+SRC := src/word-count.cpp 
+
+.PHONY: fpga_emu run_emu clean 
+
+fpga_emu: word-count.fpga_emu
+
+hw: word-count.fpga
+
+report: word-count_report.a
+
+word-count.fpga_emu: $(SRC)
+	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -DFPGA_EMULATOR=1
+
+
+a.o: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+
+word-count.fpga:  $(SRC)
+	$(CXX) $(CXXFLAGS) $(CXXINC) -fintelfpga $^ -o $@ -Xshardware -DFPGA=1
+
+run_emu: word-count.fpga_emu
+	./word-count.fpga_emu
+
+run_hw: word-count.fpga
+	./word-count.fpga
+
+dev.o: $(SRC)
+	$(CXX) $(CXXFLAGS) -fintelfpga -c $^ -o $@ -DFPGA=1
+
+word-count_report.a: dev.o
+	$(CXX) $(CXXFLAGS) -fintelfpga -fsycl-link $^ -o $@ -Xshardware
+
+clean:
+	rm -rf *.o *.d *.out *.mon *.emu *.aocr *.aoco *.prj *.fpga_emu *.fpga_emu_buffers word-count.fpga *.a

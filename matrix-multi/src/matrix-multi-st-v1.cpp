@@ -19,36 +19,20 @@
 
 using namespace sycl;
 
-using Duration = std::chrono::duration<double>;
-class Timer {
- public:
-  Timer() : start(std::chrono::steady_clock::now()) {}
-
-  Duration elapsed() {
-    auto now = std::chrono::steady_clock::now();
-    return std::chrono::duration_cast<Duration>(now - start);
-  }
-
- private:
-  std::chrono::steady_clock::time_point start;
-};
-
 // matrice shapes for this example.
 // A: a_rows x a_columns
 // B: a_columns x b_columns
 // C,Sum: a_rows x b_columns
 constexpr size_t a_rows = 800;
-constexpr size_t a_columns = 1000;
-constexpr size_t b_columns = 2000;
+constexpr size_t a_columns = 1600;
+constexpr size_t b_columns = 3200;
 
 class MMstv1;
 
 void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)[b_columns], 
   float (*matrix_c)[b_columns], float (*matrix_d_parallel)[b_columns]) {
 
-  std::cout << "MatrixMultiplication using single_task()." << std::endl;
-
-  Timer t;
+  std::cout << "MatrixMultiplication using single_task() v1." << std::endl;
 
   // Create the range object for the arrays managed by the buffer.
   range<2> num_items{a_rows, b_columns};
@@ -63,7 +47,7 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
 
   // Submit a command group to the queue by a lambda function that contains the
   // data access permission and device computation (kernel).
-  q.submit([&](handler &h) {
+  event e = q.submit([&](handler &h) {
     // Create an accessor for each buffer with access permission: read, write or
     // read/write. The accessor is a mean to access the memory in the buffer.
     auto a = a_buf.get_access<access::mode::read, access::target::global_buffer>(h);
@@ -81,9 +65,9 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     h.single_task<MMstv1>([=]() [[intel::kernel_args_restrict]]
       { 
         size_t row, col;
-        float s = 0;
         for (row = 0; row < a_rows; row++)
           for (col = 0; col < b_columns; col++) {
+            float s = 0;
             #pragma unroll 2
             for (size_t k = 0; k < a_columns; k++)
               s += a[row][k] * b[k][col]; 
@@ -92,7 +76,17 @@ void MatrixMulti_st_v1(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
       });
   });
 
-  std::cout << t.elapsed().count() << " seconds\n";
+#if FPGA || FPGA_PROFILE
+  // Query event e for kernel profiling information
+  // (blocks until command groups associated with e complete)
+  double kernel_time_ns =
+    e.get_profiling_info<info::event_profiling::command_end>() -
+    e.get_profiling_info<info::event_profiling::command_start>();
+
+  // Report profiling info
+  std::cout << "Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+#endif
+
 }
 
 
@@ -157,8 +151,15 @@ int main() {
       sum_stv1[i][j] = 0.0;
     }
 
+  std::cout << "Matrix A size: " << a_rows << "," << a_columns << std::endl;
+  std::cout << "Matrix B size: " << a_columns << "," << b_columns << std::endl;
+  std::cout << "Matrices C, D size: " << a_rows << "," 
+              << b_columns << std::endl;
+
 #ifndef FPGA_PROFILE
-  Timer th;
+  // Start the timer (using std::chrono)
+  dpc_common::TimeInterval exec_time;    
+
   // Compute the sum of two arrays in sequential for validation.
   std::cout << "computing on host..." << std::endl;
   for (size_t i = 0; i < a_rows; i++)
@@ -167,19 +168,18 @@ int main() {
       for (size_t k = 0; k < a_columns; k++)
         sum_sequential[i][j] += A[i][k] * B[k][j];
     }
-  std::cout << th.elapsed().count() << " seconds\n";
+
+  double host_time_s = exec_time.Elapsed();
+  std::cout << "host compute time " << host_time_s * 1000 << " ms\n";
 #endif
 
   try {
-    queue q(d_selector, dpc_common::exception_handler);
+    queue q(d_selector, dpc_common::exception_handler, 
+            property::queue::enable_profiling{});
 
     // Print out the device information used for the kernel code.
     std::cout << "Running on device: "
               << q.get_device().get_info<info::device::name>() << "\n";
-    std::cout << "Matrix A size: " << a_rows << "," << a_columns << std::endl;
-    std::cout << "Matrix B size: " << a_columns << "," << b_columns << std::endl;
-    std::cout << "Matrices C, D size: " << a_rows << "," 
-              << b_columns << std::endl;
 
     // Matrix multiplication in DPC++
     MatrixMulti_st_v1(q, A, B, C, sum_stv1);
@@ -188,9 +188,10 @@ int main() {
     // Verify that the two arrays are equal.
     for (size_t i = 0; i < a_rows; i++)
       for (size_t j = 0; j < b_columns; j++) 
-        if( (sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
+        if( abs(sum_sequential[i][j] - sum_stv1[i][j]) > 0.0001) {
           std::cout << "not equal" << std::endl;
-          return -1;
+          std::cout << i << " " << j << " " << sum_sequential[i][j] 
+          << " " << sum_stv1[i][j] << std::endl;          return -1;
         }
     std::cout << "Matrix multiplication successfully completed on device.\n";
 #endif
