@@ -145,7 +145,7 @@ int main(int argc, char* argv[])
                          (iterations - 1);
 
       std::cout << "Average latency for the restricted USM kernel: "
-                << restricted_usm_avg_lat << " ms\n";
+                << usm_avg_lat << " ms\n";
     #endif
 
     // free the allocated host usm memory

@@ -18,9 +18,7 @@
 using namespace sycl;
 
 // useful headers for image processing
-#include "utils.h"
 #include "bmp-utils.h"
-#include "gold.h"
 
 // pipe_array headers
 #include "pipe_array.hpp"
@@ -49,7 +47,6 @@ static const char* output_filename = "./Images/filtered_cat.bmp";
 
 #define IMAGE_SIZE (720*1080)
 constexpr size_t array_size = IMAGE_SIZE;
-constexpr size_t pipe_size = array_size * 2;
 typedef std::array<float, array_size> FloatArray;
 
 // 2-D pipe matrix. One pipe for each pixel, for each image filter.
@@ -61,22 +58,19 @@ constexpr size_t kNumCols = 1080;
 using ProducerPipeArray = PipeArray<class ProducerPipe, // Identifier for the pipe
                                     float,              // Type of data in the pipe
                                     array_size,         // max capacity of the pipe
-                                    2                   // number of pipes to create
-                                    >;
-
+                                    2>;                 // number of pipes to create
 
 template <size_t producer_id> class ProducerKernel;
 class ConsumerKernel;
 
 template<size_t producer_id>
-double Producer(queue &q, float *image_in,
+sycl::event Producer(queue &q, float *image_in,
               float *filter_in, const size_t FilterWidth,
               const size_t ImageRows, const size_t ImageCols)
 {
   std::cout << "Enqueuing producer " << producer_id << "..." << std::endl;
 
   buffer<float, 1> image_in_buf(image_in, range<1>(ImageRows * ImageCols));
-  //buffer<float, 1> image_out_buf(image_out, range<1>(ImageRows * ImageCols));
   buffer<float, 1> filter_buf(filter_in, range<1>(FilterWidth*FilterWidth));
 
   //
@@ -84,7 +78,12 @@ double Producer(queue &q, float *image_in,
   //
   int halfFilterWidth = (int)FilterWidth/2;
 
-  event e = q.submit([&](handler &h)
+  //
+  // Create the range object for the pixel data
+  //
+  range<2> num_items {ImageRows, ImageCols};
+
+  auto e = q.submit([&](handler &h)
   {
     auto sourcePtr = image_in_buf.get_access<access::mode::read>(h);
     auto filterPtr = filter_buf.get_access<access::mode::read>(h);
@@ -94,45 +93,52 @@ double Producer(queue &q, float *image_in,
     // Need to do this as single task to ensure the order
     // of pixels being processed by the consumer kernel;
     //
-    h.single_task<ProducerKernel<producer_id>>([=]()
+    /*h.single_task<ProducerKernel<producer_id>>([=]()
     {
       for (int row = 0; row < ImageRows; row++)
       {
         for (int col = 0; col < ImageCols; col++)
+        {*/
+    h.parallel_for(num_items, [=](id<2> item)
+    {
+      //
+      // Get the cow and col of the pixel assigned to this work item
+      //
+      int row = item[0];
+      int col = item[1];
+
+      // Each work item iterates around its local are based on the size of the filter.
+      float sum = 0.0f;
+
+      //
+      // Apply the filter to the pixel neigborhood
+      //
+      for (int k = -halfFilterWidth; k <= halfFilterWidth; k++)
+      {
+        for (int l = -halfFilterWidth; l <= halfFilterWidth; l++)
         {
+          // Indices used to access the image
+          int r = row + k;
+          int c = col + l;
 
-          // Each work item iterates around its local are based on the size of the filter.
-          float sum = 0.0f;
+          // Handle out of bounds  locations by clamping to the border pixel
+          r = (r < 0) ? 0 : r;
+          c = (c < 0) ? 0 : c;
+          r = (r >= ImageRows) ? ImageRows - 1 : r;
+          c = (c >= ImageCols) ? ImageCols - 1 : c;
 
-          //
-          // Apply the filter to the pixel neigborhood
-          //
-          for (int k = -halfFilterWidth; k <= halfFilterWidth; k++)
-          {
-            for (int l = -halfFilterWidth; l <= halfFilterWidth; l++)
-            {
-              // Indices used to access the image
-              int r = row + k;
-              int c = col + l;
-
-              // Handle out of bounds  locations by clamping to the border pixel
-              r = (r < 0) ? 0 : r;
-              c = (c < 0) ? 0 : c;
-              r = (r >= ImageRows) ? ImageRows - 1 : r;
-              c = (c >= ImageCols) ? ImageCols - 1 : c;
-
-              sum += sourcePtr[r * ImageCols + c] *
-                filterPtr[(k + halfFilterWidth) * FilterWidth + (l + halfFilterWidth)];
-
-            }
-          }
-          //
-          // Write the value to the pipe for the given filter, row, col values
-          //
-          ProducerPipeArray::PipeAt<producer_id>::write(sum);
+          sum += sourcePtr[r * ImageCols + c] *
+            filterPtr[(k + halfFilterWidth) * FilterWidth + (l + halfFilterWidth)];
 
         }
       }
+      //
+      // Write the value to the pipe for the given filter, row, col values
+      //
+      ProducerPipeArray::PipeAt<producer_id>::write(sum);
+
+        //}
+      //}
     });
   });
 
@@ -140,13 +146,15 @@ double Producer(queue &q, float *image_in,
   // Get the elapsed kernel time, mostly just to see difference between
   // single_task and parallel_for execution schema
   //
-  double start_time_ns = e.get_profiling_info<info::event_profiling::command_start>();
-  double end_time_ns = e.get_profiling_info<info::event_profiling::command_end>();
+  //double start_time_ns = e.get_profiling_info<info::event_profiling::command_start>();
+  //double end_time_ns = e.get_profiling_info<info::event_profiling::command_end>();
+  std::cout << "Finished Enqueuing producer " << producer_id << "..." << std::endl;
 
-  return (end_time_ns - start_time_ns);
+  return e;
+  //return (end_time_ns - start_time_ns);
 }
 
-double Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t ImageCols)
+sycl::event Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t ImageCols)
 {
   std::cout << "Enqueuing consumer..." << std::endl;
 
@@ -155,7 +163,7 @@ double Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t
   //
   buffer<float, 1> image_out_buf(image_out, range<1>(ImageRows * ImageCols));
 
-  event e = q.submit([&](handler &h)
+  auto e = q.submit([&](handler &h)
   {
     auto destPtr = image_out_buf.get_access<access::mode::write>(h);
 
@@ -187,11 +195,13 @@ double Consumer(queue &q, float *image_out, const size_t ImageRows, const size_t
   // Get the elapsed kernel time, mostly just to see difference between
   // single_task and parallel_for execution schema
   //
-  double start_time_ns = e.get_profiling_info<info::event_profiling::command_start>();
-  double end_time_ns = e.get_profiling_info<info::event_profiling::command_end>();
+  //double start_time_ns = e.get_profiling_info<info::event_profiling::command_start>();
+  //double end_time_ns = e.get_profiling_info<info::event_profiling::command_end>();
 
-  return (end_time_ns - start_time_ns);
+  //return (end_time_ns - start_time_ns);
+  std::cout << "Finished Enqueuing consumer..." << std::endl;
 
+  return e;
 }
 
 // **************************************************************************************
@@ -370,23 +380,38 @@ int main()
     //
     double start_time = exec_time.Elapsed();
 
-    auto horzKernelTime = Producer<0>(q, hInputImage, horizontalSobelFilter, sobelFilterWidth, imageRows, imageCols);
-    auto vertKernelTime = Producer<1>(q, hInputImage, verticalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    //auto horzKernelTime = Producer<0>(q, hInputImage, horizontalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    //auto vertKernelTime = Producer<1>(q, hInputImage, verticalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+
+    auto horzEvent = Producer<0>(q, hInputImage, horizontalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    std::cout << "2..." << std::endl;
+
+    auto vertEvent = Producer<1>(q, hInputImage, verticalSobelFilter, sobelFilterWidth, imageRows, imageCols);
+    std::cout << "3..." << std::endl;
 
     //
     // Enqueue Consumer
     //
-    auto consKernelTime = Consumer(q, outputImage, imageRows, imageCols);
+    auto consEvent = Consumer(q, outputImage, imageRows, imageCols);
+    std::cout << "1..." << std::endl;
 
-    //
-    // Stop the timer and report execution times
-    //
-    total_pipe_path_time_s = exec_time.Elapsed() - start_time;
+    q.wait();
+
+    double total_pipe_path_time_s = exec_time.Elapsed() - start_time;
+
+
+    auto horzKernelTime = (horzEvent.get_profiling_info<info::event_profiling::command_end>() -
+                      horzEvent.get_profiling_info<info::event_profiling::command_start>());
+    auto vertKernelTime = (vertEvent.get_profiling_info<info::event_profiling::command_end>() -
+                      vertEvent.get_profiling_info<info::event_profiling::command_start>());
+    auto consKernelTime = (consEvent.get_profiling_info<info::event_profiling::command_end>() -
+                      consEvent.get_profiling_info<info::event_profiling::command_start>());
 
     std::cout << "Horizontal kernel compute time:  " << horzKernelTime * 1e-6 << " ms." << std::endl;
     std::cout << "Vertical kernel compute time:  " << vertKernelTime * 1e-6 << " ms." << std::endl;
     std::cout << "Consumer kernel compute time:  " << consKernelTime * 1e-6 << " ms." << std::endl;
     std::cout << "Total compute time:  " << total_pipe_path_time_s * 1e3 << " ms." << std::endl;
+
 
     //
     // Run the horizontal line filter, then the vertical line filter
@@ -396,7 +421,6 @@ int main()
 
     filter = verticalSobelFilter;
     ImageConv(q, hInputImage, vOutputImage, filter, sobelFilterWidth, imageRows, imageCols);
-
   }
   catch(const std::exception& e)
   {
