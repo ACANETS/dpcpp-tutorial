@@ -43,7 +43,7 @@ using namespace sycl;
 #define NUM_KEYWORDS 4
 
 constexpr unsigned MAX_WG_SIZE = 16;
-constexpr unsigned CHAR_PER_WORKITEM = 1024;
+//constexpr unsigned CHAR_PER_WORKITEM = 1024;
 
 // templates for atomic ref operations
 template <typename T>
@@ -66,7 +66,7 @@ size_t text_size;
 // Word Count in DPC++ on device: 
 //************************************
 void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups, 
-  int wgroup_size, std::vector<char4> pattern, char* text, int chars_per_item, uint32_t* global_result) 
+  int wgroup_size, std::vector<char4> pattern, char* text, size_t chars_per_item, uint32_t* global_result) 
 {
 #if FPGA || FPGA_PROFILE
   double total_kernel_time_ns = 0;
@@ -84,12 +84,12 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
   std::cout << std::endl << "n_wgroups = " << n_wgroups << std::endl;
   std::cout << "wgroup_size = " << wgroup_size << std::endl;
 
-  auto n_steps = (int)(total_num_workitems + n_wgroups*wgroup_size -1) / 
-    (n_wgroups*wgroup_size);
+  //auto n_steps = (int)(total_num_workitems + n_wgroups*wgroup_size -1) / 
+    //(n_wgroups*wgroup_size);
 
-  auto step = 0;
+  //auto step = 0;
 
-  while(step < n_steps ) {
+  //while(step < n_steps ) {
     
     event e = q.submit([&] (handler& h) {
     // allocate local memory
@@ -119,8 +119,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       {
 
         // initialize local data
-        group<1> g = item.get_group();
-        size_t group_id = g.get_id();
+        //group<1> g = item.get_group();
+        //size_t group_id = g.get_id();
         size_t local_id = item.get_local_id(0);
 
         if (local_id == 0) {
@@ -133,9 +133,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
 
         // In each step, each work item will process char_per_item characters
         // Prior to this step, there are many characters processed already 
-        int item_offset = step * n_wgroups * wgroup_size * chars_per_item 
-                          + group_id * wgroup_size * chars_per_item 
-                          + local_id * chars_per_item;
+        int item_offset = local_id * chars_per_item;
 
         /* Iterate through characters in text */
         for(int i=item_offset; i<item_offset + chars_per_item; i++) {
@@ -177,14 +175,14 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       e.get_profiling_info<info::event_profiling::command_start>();
 
     // Report profiling info
-    std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
+    //std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
 
     total_kernel_time_ns += kernel_time_ns;
 #endif
-    step++;
-  } // while
+    //step++;
+  //} // while
 
-  std::cout<<"total "<<step<<" steps completed.\n";
+  //std::cout<<"total "<<step<<" steps completed.\n";
 
 #if FPGA || FPGA_PROFILE
     // Report profiling info as it takes multiple steps
@@ -217,8 +215,8 @@ int main(int argc, char **argv) {
 
   FILE *text_handle;
   char *text;
-  int chars_per_item;
-  int n_local_results;
+  size_t chars_per_item;
+  size_t n_local_results;
 
   /* Read text file and place content into buffer */
   if (argc != 2)
@@ -306,15 +304,16 @@ int main(int argc, char **argv) {
     auto global_mem_size = dev.get_info<info::device::global_mem_size>();
     std::cout << "global_mem_size = " << global_mem_size << std::endl;
 
-    auto total_num_workitems = (int)(text_size + CHAR_PER_WORKITEM - 1) / CHAR_PER_WORKITEM;
     auto num_groups = num_cmpunit;
-    std::cout << "chars_per_item = " << CHAR_PER_WORKITEM << std::endl;
+    auto total_num_workitems = num_groups * wgroup_size;
+    chars_per_item = (size_t)(text_size + total_num_workitems - 1)/total_num_workitems;
+    std::cout << "chars_per_item = " << chars_per_item << std::endl;
     std::cout << "total_num_workitems = " << total_num_workitems << std::endl;
     std::cout << "num_groups = " << num_groups << std::endl;
 
     // Word count in DPC++
     string_search(q, total_num_workitems, num_groups, wgroup_size, pattern, text, 
-      CHAR_PER_WORKITEM, result);
+      chars_per_item, result);
   
   } catch (exception const &e) {
     std::cout << "An exception is caught for word count.\n";
