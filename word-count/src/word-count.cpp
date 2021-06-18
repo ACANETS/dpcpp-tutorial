@@ -72,17 +72,17 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
   double total_kernel_time_ns = 0;
 #endif
 
-  char4 keywords[NUM_KEYWORDS];
-  for(int k = 0; k < NUM_KEYWORDS ; k++){
-    keywords[k] = pattern[k];
-  }
-
   // buffers for device
   buffer<char,1> text_buf(text, range<1>(text_size));
   buffer<uint32_t, 1> global_result_buf(global_result, range<1>(NUM_KEYWORDS));
 
   std::cout << std::endl << "n_wgroups = " << n_wgroups << std::endl;
   std::cout << "wgroup_size = " << wgroup_size << std::endl;
+
+  char4 keywords[NUM_KEYWORDS];
+  for(int k = 0; k < NUM_KEYWORDS ; k++){
+    keywords[k] = pattern[k];
+  }
 
   //auto n_steps = (int)(total_num_workitems + n_wgroups*wgroup_size -1) / 
     //(n_wgroups*wgroup_size);
@@ -150,7 +150,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
                 text_word.w() == keywords[k].w()
               )
             {
-              // we need to increment the count (in local mem) ATOMICALLY for keywords[k]
+              // increment the count (in local mem) ATOMICALLY for keywords[k]
               local_atomic_ref<uint32_t>(local_mem[k])++;
             }
           }
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
   //cpu_selector d_selector;
 #endif
 
-  uint32_t result[4] = {0, 0, 0, 0};
+  uint32_t result[NUM_KEYWORDS] = {0, 0, 0, 0};
   // we search for four key words: "that", "with", "have", "from"
   std::vector<char4> pattern;
   pattern.push_back({'t','h','a','t'});
@@ -234,6 +234,11 @@ int main(int argc, char **argv) {
   fread(text, sizeof(char), text_size, text_handle);
   fclose(text_handle);
   std::cout << "file size = " << text_size << " bytes " << std::endl;
+
+  char4 keywords[NUM_KEYWORDS];
+  for(int k = 0; k < NUM_KEYWORDS ; k++){
+    keywords[k] = pattern[k];
+  }
 
 #ifndef FPGA_PROFILE
   // Query about the platform
@@ -321,9 +326,28 @@ int main(int argc, char **argv) {
   }
 
   // display final results in global memory
+  std::cout << "\n results computed on device:\n";
   for(int i=0; i < NUM_KEYWORDS; i++)
     std::cout << "keyword " << pattern[i][0]<<pattern[i][1]<<pattern[i][2]<<pattern[i][3] 
     << " appears " << result[i] << " times" << std::endl;
+
+  uint32_t host_result[NUM_KEYWORDS]={0,0,0,0};
+  dpc_common::TimeInterval exec_time;
+  for(int i=0; i < text_size - 3; i++)
+    for(int k=0; k < NUM_KEYWORDS; k++)
+      if ( text[i] == keywords[k].x() &&
+           text[i+1] == keywords[k].y() &&
+           text[i+2] == keywords[k].z() &&
+           text[i+3] == keywords[k].w())
+	 host_result[k]++;
+  double host_time_s = exec_time.Elapsed();
+  std::cout << "host compute time " << host_time_s * 1000 << " ms\n";
+
+  // display final results computed on host
+  std::cout << "\n results computed on host:\n";
+  for(int i=0; i < NUM_KEYWORDS; i++)
+    std::cout << "keyword " << pattern[i][0]<<pattern[i][1]<<pattern[i][2]<<pattern[i][3] 
+    << " appears " << host_result[i] << " times" << std::endl;
 
   return 0;
 }
