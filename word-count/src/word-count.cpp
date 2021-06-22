@@ -84,14 +84,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
     keywords[k] = pattern[k];
   }
 
-  //auto n_steps = (int)(total_num_workitems + n_wgroups*wgroup_size -1) / 
-    //(n_wgroups*wgroup_size);
-
-  //auto step = 0;
-
-  //while(step < n_steps ) {
-    
-    event e = q.submit([&] (handler& h) {
+  event e = q.submit([&] (handler& h) {
     // allocate local memory
     // to allow each workgroup has a local memory space of int32_t*NUM_KEYWORDS
     // for maintaining a set of keyword counters for all the workitems in a workgroup
@@ -119,8 +112,6 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       {
 
         // initialize local data
-        //group<1> g = item.get_group();
-        //size_t group_id = g.get_id();
         size_t local_id = item.get_local_id(0);
 
         if (local_id == 0) {
@@ -131,8 +122,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
         }
         item.barrier(sycl::access::fence_space::local_space);         
 
-        // In each step, each work item will process char_per_item characters
-        // Prior to this step, there are many characters processed already 
+        // Each work item will process char_per_item characters
         int item_offset = local_id * chars_per_item;
 
         /* Iterate through characters in text */
@@ -165,8 +155,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
           global_atomic_ref<uint32_t>(global_mem[3]) += local_mem[3];
         }
 
-      }); // parallel_for
-    }); // q.submit
+    }); // parallel_for
+  }); // q.submit
 #if FPGA || FPGA_PROFILE
     // Query event e for kernel profiling information
     // (blocks until command groups associated with e complete)
@@ -174,17 +164,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       e.get_profiling_info<info::event_profiling::command_end>() -
       e.get_profiling_info<info::event_profiling::command_start>();
 
-    // Report profiling info
-    //std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
-
     total_kernel_time_ns += kernel_time_ns;
-#endif
-    //step++;
-  //} // while
 
-  //std::cout<<"total "<<step<<" steps completed.\n";
-
-#if FPGA || FPGA_PROFILE
     // Report profiling info as it takes multiple steps
     std::cout << " Total Kernel compute time:  " << total_kernel_time_ns * 1e-6 << " ms\n";
 #endif
