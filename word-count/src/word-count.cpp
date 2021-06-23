@@ -43,7 +43,7 @@ using namespace sycl;
 #define NUM_KEYWORDS 4
 
 constexpr unsigned MAX_WG_SIZE = 16;
-constexpr unsigned CHAR_PER_WORKITEM = 1024;
+//constexpr unsigned CHAR_PER_WORKITEM = 1024;
 
 // templates for atomic ref operations
 template <typename T>
@@ -66,16 +66,11 @@ size_t text_size;
 // Word Count in DPC++ on device: 
 //************************************
 void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups, 
-  int wgroup_size, std::vector<char4> pattern, char* text, int chars_per_item, uint32_t* global_result) 
+  int wgroup_size, std::vector<char4> pattern, char* text, size_t chars_per_item, uint32_t* global_result) 
 {
 #if FPGA || FPGA_PROFILE
   double total_kernel_time_ns = 0;
 #endif
-
-  char4 keywords[NUM_KEYWORDS];
-  for(int k = 0; k < NUM_KEYWORDS ; k++){
-    keywords[k] = pattern[k];
-  }
 
   // buffers for device
   buffer<char,1> text_buf(text, range<1>(text_size));
@@ -84,14 +79,12 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
   std::cout << std::endl << "n_wgroups = " << n_wgroups << std::endl;
   std::cout << "wgroup_size = " << wgroup_size << std::endl;
 
-  auto n_steps = (int)(total_num_workitems + n_wgroups*wgroup_size -1) / 
-    (n_wgroups*wgroup_size);
+  char4 keywords[NUM_KEYWORDS];
+  for(int k = 0; k < NUM_KEYWORDS ; k++){
+    keywords[k] = pattern[k];
+  }
 
-  auto step = 0;
-
-  while(step < n_steps ) {
-    
-    event e = q.submit([&] (handler& h) {
+  event e = q.submit([&] (handler& h) {
     // allocate local memory
     // to allow each workgroup has a local memory space of int32_t*NUM_KEYWORDS
     // for maintaining a set of keyword counters for all the workitems in a workgroup
@@ -119,8 +112,6 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       {
 
         // initialize local data
-        group<1> g = item.get_group();
-        size_t group_id = g.get_id();
         size_t local_id = item.get_local_id(0);
 
         if (local_id == 0) {
@@ -131,11 +122,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
         }
         item.barrier(sycl::access::fence_space::local_space);         
 
-        // In each step, each work item will process char_per_item characters
-        // Prior to this step, there are many characters processed already 
-        int item_offset = step * n_wgroups * wgroup_size * chars_per_item 
-                          + group_id * wgroup_size * chars_per_item 
-                          + local_id * chars_per_item;
+        // Each work item will process char_per_item characters
+        int item_offset = local_id * chars_per_item;
 
         /* Iterate through characters in text */
         for(int i=item_offset; i<item_offset + chars_per_item; i++) {
@@ -152,7 +140,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
                 text_word.w() == keywords[k].w()
               )
             {
-              // we need to increment the count (in local mem) ATOMICALLY for keywords[k]
+              // increment the count (in local mem) ATOMICALLY for keywords[k]
               local_atomic_ref<uint32_t>(local_mem[k])++;
             }
           }
@@ -167,8 +155,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
           global_atomic_ref<uint32_t>(global_mem[3]) += local_mem[3];
         }
 
-      }); // parallel_for
-    }); // q.submit
+    }); // parallel_for
+  }); // q.submit
 #if FPGA || FPGA_PROFILE
     // Query event e for kernel profiling information
     // (blocks until command groups associated with e complete)
@@ -176,17 +164,8 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       e.get_profiling_info<info::event_profiling::command_end>() -
       e.get_profiling_info<info::event_profiling::command_start>();
 
-    // Report profiling info
-    std::cout << "step " << step <<" Kernel compute time:  " << kernel_time_ns * 1e-6 << " ms\n";
-
     total_kernel_time_ns += kernel_time_ns;
-#endif
-    step++;
-  } // while
 
-  std::cout<<"total "<<step<<" steps completed.\n";
-
-#if FPGA || FPGA_PROFILE
     // Report profiling info as it takes multiple steps
     std::cout << " Total Kernel compute time:  " << total_kernel_time_ns * 1e-6 << " ms\n";
 #endif
@@ -207,7 +186,7 @@ int main(int argc, char **argv) {
   //cpu_selector d_selector;
 #endif
 
-  uint32_t result[4] = {0, 0, 0, 0};
+  uint32_t result[NUM_KEYWORDS] = {0, 0, 0, 0};
   // we search for four key words: "that", "with", "have", "from"
   std::vector<char4> pattern;
   pattern.push_back({'t','h','a','t'});
@@ -217,8 +196,8 @@ int main(int argc, char **argv) {
 
   FILE *text_handle;
   char *text;
-  int chars_per_item;
-  int n_local_results;
+  size_t chars_per_item;
+  size_t n_local_results;
 
   /* Read text file and place content into buffer */
   if (argc != 2)
@@ -236,6 +215,11 @@ int main(int argc, char **argv) {
   fread(text, sizeof(char), text_size, text_handle);
   fclose(text_handle);
   std::cout << "file size = " << text_size << " bytes " << std::endl;
+
+  char4 keywords[NUM_KEYWORDS];
+  for(int k = 0; k < NUM_KEYWORDS ; k++){
+    keywords[k] = pattern[k];
+  }
 
 #ifndef FPGA_PROFILE
   // Query about the platform
@@ -306,15 +290,16 @@ int main(int argc, char **argv) {
     auto global_mem_size = dev.get_info<info::device::global_mem_size>();
     std::cout << "global_mem_size = " << global_mem_size << std::endl;
 
-    auto total_num_workitems = (int)(text_size + CHAR_PER_WORKITEM - 1) / CHAR_PER_WORKITEM;
     auto num_groups = num_cmpunit;
-    std::cout << "chars_per_item = " << CHAR_PER_WORKITEM << std::endl;
+    auto total_num_workitems = num_groups * wgroup_size;
+    chars_per_item = (size_t)(text_size + total_num_workitems - 1)/total_num_workitems;
+    std::cout << "chars_per_item = " << chars_per_item << std::endl;
     std::cout << "total_num_workitems = " << total_num_workitems << std::endl;
     std::cout << "num_groups = " << num_groups << std::endl;
 
     // Word count in DPC++
     string_search(q, total_num_workitems, num_groups, wgroup_size, pattern, text, 
-      CHAR_PER_WORKITEM, result);
+      chars_per_item, result);
   
   } catch (exception const &e) {
     std::cout << "An exception is caught for word count.\n";
@@ -322,9 +307,28 @@ int main(int argc, char **argv) {
   }
 
   // display final results in global memory
+  std::cout << "\n results computed on device:\n";
   for(int i=0; i < NUM_KEYWORDS; i++)
     std::cout << "keyword " << pattern[i][0]<<pattern[i][1]<<pattern[i][2]<<pattern[i][3] 
     << " appears " << result[i] << " times" << std::endl;
+
+  uint32_t host_result[NUM_KEYWORDS]={0,0,0,0};
+  dpc_common::TimeInterval exec_time;
+  for(int i=0; i < text_size - 3; i++)
+    for(int k=0; k < NUM_KEYWORDS; k++)
+      if ( text[i] == keywords[k].x() &&
+           text[i+1] == keywords[k].y() &&
+           text[i+2] == keywords[k].z() &&
+           text[i+3] == keywords[k].w())
+	 host_result[k]++;
+  double host_time_s = exec_time.Elapsed();
+  std::cout << "host compute time " << host_time_s * 1000 << " ms\n";
+
+  // display final results computed on host
+  std::cout << "\n results computed on host:\n";
+  for(int i=0; i < NUM_KEYWORDS; i++)
+    std::cout << "keyword " << pattern[i][0]<<pattern[i][1]<<pattern[i][2]<<pattern[i][3] 
+    << " appears " << host_result[i] << " times" << std::endl;
 
   return 0;
 }

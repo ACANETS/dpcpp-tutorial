@@ -20,7 +20,7 @@ This 'word-count' example first finds out the information regarding the device s
 
 Word-count uses DPC++ a global memory buffer to store text file data and a local memory buffer to store intermediate counters for each work group. The final counter results are stored in a global memory buffer. Since multiple work-items may be incrementing the counts at the same time, we use atomic operations (e.g. read, write) to ensure no race conditions and the correctness of the increments.
 
-The Map procedure uses a fixed "workload" represented by "char_per_item" for each work-item. As a result, we partition the input text file into equal chunks of "text_size/char_per_item" bytes and assign each chunk to a work-item. As the FPGA architecture follows the preset workgroups and size of the workgroups, we can derive the number of times (called steps in the program) that we need to run the Map procedure. During each step, we create a total of "n_wgroups*wgroup_size" work-items.
+The Map procedure uses a fixed "workload" represented by "char_per_item" for each work-item. As a result, we partition the input text file into equal chunks of "text_size/MAX_WG_SIZE" bytes and assign each chunk to a work-item. 
 
 In the Reduction kernel, a work-item initializes the counters for the work-group, and reads its assigned chunk from the text file data. It scans through the chunk byte by byte and compares with the keywords simultaneously. If a keyword is matched, the corresponding counter in the local memory will be incremented atomically. At the end of reduction, one of the work-items in a work-group will increment the global counters atomically.  
 
