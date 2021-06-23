@@ -63,9 +63,9 @@ The following instructions are specifically for the hands-on session of oneAPI D
 ```
 On your local computer
 ```
-    scp <full path to build dir>/reports.tgz .
+    scp devcloud:<full path to build dir>/reports.tgz .
     tar zxvf reports.tgz
 ```
-Open the report.html file in your browser
+Open in your Web browser the report.html file in reports folder.
 
 
