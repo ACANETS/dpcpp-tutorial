@@ -10,7 +10,7 @@ Word Count example searches through a text file and count the occurences of give
 
 ## Purpose
 
-We use word-count to show how to design MapReduce programs with DPC++, which can target CPU, GPU and FPGAs. See [README.md] for design details.
+We use word-count to show how to design MapReduce programs with DPC++, which can target CPU, GPU and FPGAs. See [README.md](./README.md) for design details.
 
 The following instructions are specifically for the hands-on session of oneAPI DevSummit at ISC'21.
 
@@ -61,11 +61,11 @@ The following instructions are specifically for the hands-on session of oneAPI D
     pwd
     <record this full path to build dir>
 ```
-    on your local computer
+On your local computer
 ```
     scp <full path to build dir>/reports.tgz .
     tar zxvf reports.tgz
 ```
-    open the report.html file in your browser
+Open the report.html file in your browser
 
 
