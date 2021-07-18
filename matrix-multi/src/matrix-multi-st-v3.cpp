@@ -30,11 +30,11 @@ constexpr size_t a_columns = 1600;
 constexpr size_t b_columns = 3200;
 
 //#define BLOCK_SIZE 64
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 // define FPGA onchip memory banks and widths
-#define NUM_BANKS 32
+#define NUM_BANKS 16
 //#define BANK_WIDTH 512
-#define BANK_WIDTH 128
+#define BANK_WIDTH 64
 #if (BLOCK_SIZE*BLOCK_SIZE) != (NUM_BANKS*BANK_WIDTH/4)
 #error 'FPGA onchip memory needs correct number of banks and depth'
 #endif
@@ -79,6 +79,11 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
     { 
       size_t row, col, m, n, k;
       float s = 0;
+          // allocate local memory to hold a block of data from A, B
+	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
+	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
+	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
+
       for(int i=0; i < a_rows*a_columns/(BLOCK_SIZE*BLOCK_SIZE); i++) {
         // the block indices of the block in A 
         auto block_row_a = i / (a_columns/BLOCK_SIZE);
@@ -88,10 +93,6 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
         auto block_row_b = block_col_a;
         for(int j=0; j<b_columns/BLOCK_SIZE; j++)
         { 
-          // allocate local memory to hold a block of data from A, B
-	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_a[BLOCK_SIZE][BLOCK_SIZE];
-	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_b[BLOCK_SIZE][BLOCK_SIZE];
-	        [[intel::numbanks(NUM_BANKS), intel::bankwidth(BANK_WIDTH)]] float local_mem_d[BLOCK_SIZE][BLOCK_SIZE];
 
           // load blocks of data to local memory from global memory
           for (m=0; m < BLOCK_SIZE; m++)
@@ -105,7 +106,7 @@ void MatrixMulti_st_v3(queue &q, float (*matrix_a)[a_columns], float (*matrix_b)
           for (m=0; m < BLOCK_SIZE; m++)
             for ( n=0; n < BLOCK_SIZE; n++) {
               s = 0;
-	            #pragma unroll
+	      // #pragma unroll
               for (k=0; k < BLOCK_SIZE; k++)
                 s += local_mem_a[m][k] * local_mem_b[k][n]; 
               // add to Matrix D
