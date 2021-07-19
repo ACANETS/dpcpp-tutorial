@@ -75,6 +75,56 @@ An example view is as follows.
 
 ## Part II: Run-time Analysis with Profiling Tools
 
+You will need to first build the FPGA binary files, then execute them on DevCloud and collect profiling data, which can be viewed with Intel VTune Profiler on your local computer. The steps are as follows:
+
+### On DevCloud
+
+Launch batch script to build FPGA binary, execute, and collect profiling data.
+
+1) Login to the head node of DevCloud, build FPGA binary using batch script.
+
+```
+cd dpcpp-tutorial/matrix-multi
+devcloud_login -b A10OAPI A10_oneapi_batch-fpga-profile.sh
+```
+
+This script will launch a job to generate FPGA binary files with profiling counters built-in. This job may take several hours.
+
+2) execute the FPGA binary on a Devcloud Compute Node with Arria 10 and collect profiling data. (use v1 as an example)
+
+```
+cd newbuild_A10_profile
+./matrix-multi-st-v1.fpga_profile
+aocl profile -no-json ./matrix-multi-st-v1.fpga_profile
+aocl profile -no-run profile.mon ./matrix-multi-st-v1.fpga_profile
+```
+
+There are two files generated: profile.mon and profile.json, which are needed for visualized analysis with Intel VTune Profiler.
+
+3) pack the profiling data and FPGA binary into a tar ball.
+```
+mkdir st-v1-profile
+cp profile.mon profile.json ./matrix-multi-st-v1.fpga_profile st-v1-profile
+tar zcvf st-v1-profile.tgz st-v1-profile/
+``` 
+
+
+### On Local Computer
+
+4) Transfer the tar ball to your local computer, and extract the files
+```
+scp devcloud:<full_path>/st-v1-profile.tgz .
+tar zxvf st-v1-profile.tgz
+```
+The files are extracted to a folder named "st-v1-profile".
+
+5) Install Intel VTune Profiler by following the [Installation Guides](https://software.intel.com/content/www/us/en/develop/documentation/vtune-help/top/installation.html)
+
+
+6) Open the profile.* files with VTune (please refer to the recorded lecture on "[Design Analysis (II): Runtime Profiling @ 2:53](https://youtu.be/q2KZvAqhN_s?t=173)" for more information)
+
+Sample Profiling View with VTune Profiler
+![](notes/vtune-ss-sample.png)
 
 ## Recorded Lectures
 
