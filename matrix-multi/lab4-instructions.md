@@ -71,7 +71,7 @@ Alternatively, you can double-click the tar file (reports-v1.tgz) to extract the
 4) View the static analysis of your design using a browser. You can open the file named "report.html" using your favorite browser and navigate through different report sections (Summary, Throughput, Area, System Viewers). Detailed explainations are available in [Intel® oneAPI DPC++ FPGA Optimization Guide](https://software.intel.com/content/www/us/en/develop/download/oneapi-fpga-optimization-guide.html)
 
 An example view is as follows.
-(notes/st-v1-ss.png?raw=true)
+![](notes/st-v1-ss.png?raw=true)
 
 ## Part II: Run-time Analysis with Profiling Tools
 
