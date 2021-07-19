@@ -42,50 +42,39 @@ This code sample is licensed under MIT license.
 
 * make report : generate static report on the FPGA resource utilization of the designs. 
 
-For each design (each .cpp file in src/ folder), a folder containing reports will be generated after executing "make report". For example, a folder called "matrix-multi-st-v1_report.prj/" is created for source code "matrix-multi-st-v1.cpp". In this folder, there is a subdirectory called "reports/", which in turn contains the results obtained from the DPC++ compiler. We will need to copy the entire 'reports' folder to     
+For each design (each .cpp file in src/ folder), a folder containing reports will be generated after executing "make report". For example, a folder called "matrix-multi-st-v1_report.prj/" is created for source code "matrix-multi-st-v1.cpp". In this folder, there is a subdirectory called "reports/", which in turn contains the results obtained from the DPC++ compiler. You will need to copy the entire 'reports' folder from DevCloud to your local computer by following the next few steps.
 
+1) On DevCloud, create a tar ball for the "reports/" folder (using v1 as an example in this case.)
+```
+    cd matrix-multi-st-v1_report.prj/
+    tar zcvf reports-v1.tgz reports/
+    pwd
+```
+* 'pwd' shows you the full path of the tar ball file, for example, /home/uxxxxx/projects/dpcpp-tutorial/matrix-multi/build/matrix-multi-st-v1_report.prj . You need to record this path so that the following scp command can copy the tar ball file.
 
-## Running the Sample
+### On Local Computer
 
-The executables (for emulation or for FPGA hardware) can be found in the build directory. Use the file name(s) to executable the samples. For example
-    ```
-    ./matrix-multi-para.fpga_emu
-    ```
+2) On your local computer, use scp to copy the reports-v1.tgz from DevCloud to a local folder.
+```
+    scp devcloud:/home/uxxxxx/projects/dpcpp-tutorial/matrix-multi/build/matrix-multi-st-v1_report.prj/reports-v1.tgz .
+```
+Note that you need to replace the full path with the output from your 'pwd' command in Step 1).
 
-### Application Parameters
-There are no editable parameters for this sample.
+If this command completes successfully, you will see 'reports-v1.tgz' appear in your local folder.
 
-### Example of Output
+3) On your local computer, untar the tar ball file to extract the full content under "reports" folder.
+```
+    tar zxvf reports-v1.tgz
+```
+Alternatively, you can double-click the tar file (reports-v1.tgz) to extract the full content. Either way, you should see a folder named "reports" created on your local computer.
 
-* emulation on a Linux platform.
-<pre>
-1 found ..
-Platform: Intel(R) FPGA Emulation Platform for OpenCL(TM)
-Device: Intel(R) FPGA Emulation Device
-2 found ..
-Platform: Intel(R) OpenCL
-Device: Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz
-3 found ..
-Platform: Intel(R) OpenCL HD Graphics
-Device: Intel(R) Graphics [0x5912]
-4 found ..
-Platform: Intel(R) Level-Zero
-Device: Intel(R) Graphics [0x5912]
-5 found ..
-Platform: SYCL host platform
-Device: SYCL host device
+4) View the static analysis of your design using a browser. You can open the file named "report.html" using your favorite browser and navigate through different report sections (Summary, Throughput, Area, System Viewers). Detailed explainations are available in [Intel® oneAPI DPC++ FPGA Optimization Guide](https://software.intel.com/content/www/us/en/develop/download/oneapi-fpga-optimization-guide.html)
 
-computing on host...
-1.83809 seconds
-Running on device: Intel(R) FPGA Emulation Device
-Matrix A size: 800,1000
-Matrix B size: 1000,2000
-Matrices C, D size: 800,2000
-MatrixMultiplication using parallel_for().
-0.183899 seconds
-Matrix multiplication successfully completed on device.
+An example view is as follows.
+(notes/st-v1-ss.png)
 
-</pre>
+## Part II: Run-time Analysis with Profiling Tools
+
 
 ## Recorded Lectures
 
