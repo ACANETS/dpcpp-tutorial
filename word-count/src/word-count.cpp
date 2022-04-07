@@ -49,15 +49,15 @@ constexpr unsigned MAX_WG_SIZE = 16;
 template <typename T>
 using local_atomic_ref = ext::oneapi::atomic_ref<
   T,
-  ONEAPI::memory_order::relaxed,
-  ONEAPI::memory_scope::work_group,
+  ext::oneapi::memory_order::relaxed,
+  ext::oneapi::memory_scope::work_group,
   access::address_space::local_space>;
 
 template <typename T>
-using global_atomic_ref = ONEAPI::atomic_ref<
+using global_atomic_ref = ext::oneapi::atomic_ref<
   T,
-  ONEAPI::memory_order::relaxed,
-  ONEAPI::memory_scope::system,
+  ext::oneapi::memory_order::relaxed,
+  ext::oneapi::memory_scope::system,
   access::address_space::global_space>;
 
 size_t text_size;
