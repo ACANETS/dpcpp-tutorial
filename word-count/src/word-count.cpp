@@ -33,7 +33,7 @@
 #include <iostream>
 #include "dpc_common.hpp"
 #if FPGA || FPGA_EMULATOR || FPGA_PROFILE
-#include <CL/sycl/INTEL/fpga_extensions.hpp>
+#include <sycl/ext/intel/fpga_extensions.hpp>
 #endif
 
 using namespace sycl;
@@ -47,17 +47,17 @@ constexpr unsigned MAX_WG_SIZE = 16;
 
 // templates for atomic ref operations
 template <typename T>
-using local_atomic_ref = ONEAPI::atomic_ref<
+using local_atomic_ref = ext::oneapi::atomic_ref<
   T,
-  ONEAPI::memory_order::relaxed,
-  ONEAPI::memory_scope::work_group,
+  ext::oneapi::memory_order::relaxed,
+  ext::oneapi::memory_scope::work_group,
   access::address_space::local_space>;
 
 template <typename T>
-using global_atomic_ref = ONEAPI::atomic_ref<
+using global_atomic_ref = ext::oneapi::atomic_ref<
   T,
-  ONEAPI::memory_order::relaxed,
-  ONEAPI::memory_scope::system,
+  ext::oneapi::memory_order::relaxed,
+  ext::oneapi::memory_scope::system,
   access::address_space::global_space>;
 
 size_t text_size;
@@ -107,7 +107,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
       [=] (nd_item<1> item) 
       [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), 
-        cl::reqd_work_group_size(1,1,MAX_WG_SIZE),
+        sycl::reqd_work_group_size(1,1,MAX_WG_SIZE),
         intel::num_simd_work_items(MAX_WG_SIZE)]] 
       {
 
@@ -176,10 +176,10 @@ int main(int argc, char **argv) {
   // Create device selector for the device of your interest.
 #if FPGA_EMULATOR
   // DPC++ extension: FPGA emulator selector on systems without FPGA card.
-  INTEL::fpga_emulator_selector d_selector;
+  ext::intel::fpga_emulator_selector d_selector;
 #elif FPGA || FPGA_PROFILE
   // DPC++ extension: FPGA selector on systems with FPGA card.
-  INTEL::fpga_selector d_selector;
+  ext::intel::fpga_selector d_selector;
 #else
   // The default device selector will select the most performant device.
   default_selector d_selector;
