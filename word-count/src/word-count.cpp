@@ -47,7 +47,7 @@ constexpr unsigned MAX_WG_SIZE = 16;
 
 // templates for atomic ref operations
 template <typename T>
-using local_atomic_ref = ONEAPI::atomic_ref<
+using local_atomic_ref = ext::oneapi::atomic_ref<
   T,
   ONEAPI::memory_order::relaxed,
   ONEAPI::memory_scope::work_group,
