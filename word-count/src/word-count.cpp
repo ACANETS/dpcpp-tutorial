@@ -107,7 +107,7 @@ void string_search(queue &q, uint32_t total_num_workitems, uint32_t n_wgroups,
       nd_range<1>(n_wgroups * wgroup_size, wgroup_size),
       [=] (nd_item<1> item) 
       [[intel::max_work_group_size(1, 1, MAX_WG_SIZE), 
-        cl::reqd_work_group_size(1,1,MAX_WG_SIZE),
+        sycl::reqd_work_group_size(1,1,MAX_WG_SIZE),
         intel::num_simd_work_items(MAX_WG_SIZE)]] 
       {
 
